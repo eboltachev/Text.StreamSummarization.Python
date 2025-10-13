@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 from auto_summarization.domain.enums import StatusType
-from pydantic import BaseModel
+from auto_summarization.entrypoints.schemas import BaseModel
 
 
 class SessionSearchResult(BaseModel):
@@ -48,7 +48,7 @@ class CreateSessionResponse(BaseModel):
 
 class UpdateSessionSummarizationRequest(BaseModel):
     session_id: str
-    text: str
+    text: List[str]
     category: int
     version: int
 

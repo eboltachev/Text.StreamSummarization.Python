@@ -75,7 +75,18 @@ def extract_text(content: bytes, extension: str) -> str:
 
     raise ValueError("Unsupported document format")
 
-def get_analyze_types(uow: AnalysisTemplateUoW) -> str:
+def get_analyze_types(uow: AnalysisTemplateUoW) -> List[Dict[str, str | int | None]]:
     with uow:
-        prompt = # to-do
-    return prompt
+        templates = uow.templates.list()
+
+    categories: List[Dict[str, str | int | None]] = []
+    for template in sorted(templates, key=lambda item: item.category_index):
+        categories.append(
+            {
+                "index": template.category_index,
+                "category": template.category,
+                "prompt": template.prompt,
+                "model_type": template.model_type,
+            }
+        )
+    return categories
