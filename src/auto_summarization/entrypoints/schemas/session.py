@@ -17,19 +17,12 @@ class SearchSessionsResponse(BaseModel):
     results: List[SessionSearchResult]
 
 
-class SessionContent(BaseModel):
-    entities: Optional[str]
-    sentiments: Optional[str]
-    classifications: Optional[str]
-    short_summary: Optional[str]
-    full_summary: Optional[str]
-
 class SessionInfo(BaseModel):
     session_id: str
     version: int
     title: str
     text: str
-    content: SessionContent
+    summary: str
     inserted_at: float
     updated_at: float
 
@@ -43,7 +36,7 @@ class CreateSessionRequest(BaseModel):
     temporary: Optional[bool] = False
 
 class CreateSessionResponse(BaseModel):
-    content: SessionContent | None
+    summary: str
     error: Optional[str]
 
 class UpdateSessionSummarizationRequest(BaseModel):
@@ -53,7 +46,7 @@ class UpdateSessionSummarizationRequest(BaseModel):
     version: int
 
 class UpdateSessionSummarizationResponse(BaseModel):
-    content: SessionContent | None
+    summary: str
     error: Optional[str]
 
 class UpdateSessionTitleRequest(BaseModel):

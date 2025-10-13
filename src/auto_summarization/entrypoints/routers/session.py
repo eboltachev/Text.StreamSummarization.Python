@@ -5,7 +5,6 @@ from auto_summarization.entrypoints.schemas.session import (
     DeleteSessionResponse,
     FetchSessionResponse,
     SearchSessionsResponse,
-    SessionContent,
     SessionInfo,
     SessionSearchResult,
     UpdateSessionSummarizationRequest,
@@ -50,7 +49,7 @@ async def create(
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
     try:
-        content, error = create_new_session(
+        summary, error = create_new_session(
             user_id=auth,
             text=request.text,
             category_index=request.category,
@@ -58,7 +57,7 @@ async def create(
             user_uow=UserUoW(),
             analysis_uow=AnalysisTemplateUoW(),
         )
-        return CreateSessionResponse(content=SessionContent(**content), error=error)
+        return CreateSessionResponse(summary=summary, error=error)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
@@ -71,7 +70,7 @@ async def update_summarization(
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
     try:
-        content, error = update_session_summarization(
+        summary, error = update_session_summarization(
             user_id=auth,
             session_id=request.session_id,
             text=request.text,
@@ -82,7 +81,7 @@ async def update_summarization(
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
-    return UpdateSessionSummarizationResponse(content=SessionContent(**content), error=error)
+    return UpdateSessionSummarizationResponse(summary=summary, error=error)
 
 
 @router.post("/update_title", response_model=UpdateSessionTitleResponse, status_code=200)

@@ -97,9 +97,6 @@ class Settings(BaseSettings):
     AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH: str = Field(
         default="/app/analyze_types.json", description="Path to analyze types configuration"
     )
-    AUTO_SUMMARIZATION_PRETRAINED_MODEL_PATH: str = Field(
-        default="/app/hf_models/xlm-roberta-large-xnli", description="Mounted HuggingFace model path"
-    )
     AUTO_SUMMARIZATION_CONNECTION_TIMEOUT: int = Field(
         default=60, description="Timeout for knowledge base model requests"
     )
@@ -182,24 +179,14 @@ def register_analysis_templates(session: Session = session_factory()):
         payload = json.loads(path.read_text(encoding="utf-8"))
         session.query(AnalysisTemplate).delete()
         session.commit()
-        for category_index, item in enumerate(payload.get("types", [])):
-            category = item.get("category")
-            if not category:
-                continue
-            for choice_index, choice in enumerate(item.get("choices", [])):
-                name = choice.get("name")
-                prompt = choice.get("prompt", "")
-                model_type = choice.get("model_type")
-                template = AnalysisTemplate(
-                    template_id=str(uuid4()),
-                    category_index=category_index,
-                    choice_index=choice_index,
-                    category=category,
-                    choice_name=name,
-                    prompt=prompt,
-                    model_type=model_type,
-                )
-                session.add(template)
+        for # to-do in enumerate(payload.get("types", [])):
+
+
+            template = AnalysisTemplate(
+                template_id=str(uuid4()),
+                # to-do
+            )
+            session.add(template)
         session.commit()
     finally:
         session.close()

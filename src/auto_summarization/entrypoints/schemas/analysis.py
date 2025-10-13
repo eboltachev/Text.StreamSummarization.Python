@@ -3,7 +3,6 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 class LoadedDocumentInfo(BaseModel):
-    input_id: int
     text: str
 
 class LoadDocumentResponse(BaseModel):

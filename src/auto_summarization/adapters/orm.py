@@ -14,7 +14,6 @@ analysis_templates = Table(
     Column("category_index", Integer, nullable=False),
     Column("category", String, nullable=False),
     Column("prompt", Text, nullable=False),
-    Column("model_type", String, nullable=True),
 )
 
 users = Table(

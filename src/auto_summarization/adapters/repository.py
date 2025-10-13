@@ -56,6 +56,5 @@ class AnalysisTemplateRepository(IRepository):
         return (
             self.db.query(AnalysisTemplate)
             .filter_by(category_index=category_index)
-            .order_by(AnalysisTemplate.choice_index)
             .all()
         )
