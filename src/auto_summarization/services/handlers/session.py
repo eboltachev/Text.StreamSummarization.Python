@@ -1,15 +1,9 @@
-from __future__ import annotations
-
 import logging
-import math
 import sys
 from difflib import SequenceMatcher
-from functools import lru_cache
 from time import time
-from typing import Any, Dict, Iterable, List, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Iterable, List, Tuple
 from uuid import uuid4
-
-import httpx
 
 from auto_summarization.domain.enums import StatusType
 from auto_summarization.domain.session import Session
@@ -19,11 +13,6 @@ from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW, I
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from langchain_openai import ChatOpenAI
-else:
-    ChatOpenAI = Any
 
 
 def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
@@ -49,8 +38,9 @@ def create_new_session(
 ) -> Tuple[Dict[str, Any], str | None]:
     logger.info("start create_new_session")
     now = time()
+    combined_text = _combine_texts(text)
     summary = _generate_analysis(
-        text=text,
+        text=combined_text,
         category_index=category_index,
         analysis_uow=analysis_uow,
     )
@@ -58,8 +48,8 @@ def create_new_session(
     session = Session(
         session_id=str(uuid4()),
         version=0,
-        title=f"{summary[:40]}" or text[:40],
-        text=text,
+        title=(summary[:40] if summary else combined_text[:40]),
+        text=combined_text,
         summary=summary,
         inserted_at=now,
         updated_at=now,
@@ -79,14 +69,14 @@ def create_new_session(
         user.update_time(last_used_at=now)
         user_uow.commit()
     logger.info("finish create_new_session")
-    response = session.summary
+    response = _build_session_content(session.summary)
     return response, None
 
 
 def update_session_summarization(
     user_id: str,
     session_id: str,
-    text: str,
+    text: List[str],
     category_index: int,
     version: int,
     user_uow: IUoW,
@@ -104,18 +94,20 @@ def update_session_summarization(
             raise ValueError("Version mismatch")
         now = time()
 
+        combined_text = _combine_texts(text)
         summary = _generate_analysis(
-            text=text,
+            text=combined_text,
             category_index=category_index,
-            analysis_uow=analysis_uow
+            analysis_uow=analysis_uow,
         )
         session.summary = summary
+        session.text = combined_text
         session.version = version + 1
         session.updated_at = now
         user.update_time(last_used_at=now)
         user_uow.commit()
     logger.info("finish update_session_summarization")
-    response = session.summary
+    response = _build_session_content(session.summary)
     return response, None
 
 
@@ -201,6 +193,25 @@ def search_similarity_sessions(user_id: str, query: str, uow: IUoW) -> List[Dict
     return limited_results
 
 
+def _combine_texts(texts: Iterable[str]) -> str:
+    cleaned_parts = [str(part).strip() for part in texts if isinstance(part, str) and part.strip()]
+    if not cleaned_parts:
+        raise ValueError("Текст для суммаризации пуст")
+    return "\n\n".join(cleaned_parts)
+
+
+def _build_session_content(summary: str) -> Dict[str, str | None]:
+    normalized = (summary or "").strip()
+    short = normalized[:200] if normalized else None
+    return {
+        "entities": None,
+        "sentiments": None,
+        "classifications": None,
+        "short_summary": short,
+        "full_summary": normalized or None,
+    }
+
+
 def _normalize_text(value: str) -> str:
     if not value:
         return ""
@@ -221,193 +232,31 @@ def _match_score(text_blob: str, query: str) -> float:
     return float(max(matcher_score, overlap_score))
 
 
-@lru_cache(maxsize=1)
-def _get_context_window(model_name: str) -> int:
-    """Fetch the context window for the configured model."""
-
-    fallback_window = 4096
-    base_url = settings.OPENAI_API_HOST.rstrip("/")
-    model_path = f"{base_url}/models/{model_name}"
-    try:
-        with httpx.Client(timeout=settings.AUTO_SUMMARIZATION_CONNECTION_TIMEOUT) as client:
-            response = client.get(model_path)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception as exc:  # pragma: no cover - network error path
-        logger.warning("Failed to fetch model metadata for context window: %s", exc)
-        return fallback_window
-
-    def _extract_from_item(item: Dict[str, Any]) -> int | None:
-        for key in ("context_window", "context_length", "max_input_tokens", "max_context", "max_tokens"):
-            value = item.get(key)
-            if isinstance(value, int) and value > 0:
-                return value
-            if isinstance(value, str) and value.isdigit():
-                return int(value)
-        return None
-
-    if isinstance(payload, dict):
-        direct_value = _extract_from_item(payload)
-        if direct_value:
-            return direct_value
-        data = payload.get("data")
-        if isinstance(data, list):
-            for item in data:
-                if isinstance(item, dict) and item.get("id") == model_name:
-                    extracted = _extract_from_item(item)
-                    if extracted:
-                        return extracted
-    return fallback_window
-
-
-def _estimate_token_length(text: str, context_window: int) -> int:
-    if not text:
-        return 0
-    # Approximate 4 characters per token as a conservative heuristic
-    estimated = max(1, math.ceil(len(text) / 4))
-    # Guard against overflow for exceptionally long strings
-    return min(estimated, len(text)) if context_window else estimated
-
-
-def _apply_map_reduce(text: str, context_window: int) -> str:
-    try:
-        from langchain.chains.summarize import load_summarize_chain  # type: ignore
-        from langchain.docstore.document import Document  # type: ignore
-        from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
-    except ModuleNotFoundError:
-        logger.warning(
-            "LangChain is not installed; skipping map-reduce summarization and returning the original text."
-        )
-        return text
-
-    chunk_size = max(200, context_window * 4)
-    chunk_overlap = max(50, int(chunk_size * 0.1))
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        length_function=len,
-    )
-    documents = [Document(page_content=chunk) for chunk in splitter.split_text(text)]
-    if len(documents) <= 1:
-        return text
-    llm = _build_llm()
-    chain = load_summarize_chain(llm, chain_type="map_reduce")
-    summary = chain.run(documents)
-    return summary.strip() or text
-
-
-def _sanitize_prompt_text(text: str) -> str:
-    """Ensure the text passed to the LLM fits inside the model context window."""
-
-    if not text:
-        return ""
-
-    context_window = _get_context_window(settings.OPENAI_MODEL_NAME)
-    if context_window <= 0:
-        return text
-
-    safe_window = max(512, int(context_window * 0.8))
-    estimated_tokens = _estimate_token_length(text, context_window)
-    if estimated_tokens <= safe_window:
-        return text
-
-    logger.info("Condensing prompt text due to context window overflow")
-    condensed = _apply_map_reduce(text, context_window)
-    condensed = condensed or text
-
-    # If condensation is still too large, truncate to the safe character budget
-    if _estimate_token_length(condensed, context_window) > safe_window:
-        char_budget = safe_window * 4
-        condensed = condensed[:char_budget].strip()
-
-    return condensed or text[: safe_window * 4]
-
-
-def _extract_message_content(result: Any) -> str:
-    """Normalize LLM responses to plain text and condense oversized payloads."""
-
-    if result is None:
-        return ""
-    if isinstance(result, str):
-        text = result.strip()
-    else:
-        content = getattr(result, "content", result)
-        if isinstance(content, str):
-            text = content.strip()
-        elif isinstance(content, list):
-            parts: List[str] = []
-            for item in content:
-                if isinstance(item, dict):
-                    parts.append(str(item.get("text", "")))
-                else:
-                    parts.append(str(item))
-            text = "".join(parts).strip()
-        else:
-            text = str(content).strip()
-
-    if not text:
-        return ""
-
-    context_window = _get_context_window(settings.OPENAI_MODEL_NAME)
-    if _estimate_token_length(text, context_window) > context_window:
-        logger.info("Applying map-reduce summarization due to context window overflow")
-        return _apply_map_reduce(text, context_window)
-
-    return text
-
-
-def _normalize_label(output: str, candidates: List[str]) -> str:
-    """Pick the most suitable label from candidates based on LLM output."""
-
-    if not candidates:
-        return output.strip()
-    normalized_output = output.strip().lower()
-    for candidate in candidates:
-        if candidate.lower() in normalized_output:
-            return candidate
-    return candidates[0]
-
-
 def _load_prompt(
     category_index: int,
     analysis_uow: AnalysisTemplateUoW,
 ) -> str:
     with analysis_uow:
-        prompt = # to-do
-    return prompt
+        template = analysis_uow.templates.get_by_category(category_index)
+    if template is None:
+        raise ValueError("Неизвестная категория анализа")
+    return template.prompt or ""
 
-
-def _build_llm() -> "ChatOpenAI":
-    if not settings.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not configured. Set the environment variable to use the LLM client.")
-    try:
-        from langchain_openai import ChatOpenAI as _ChatOpenAI  # type: ignore
-    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency path
-        raise RuntimeError(
-            "langchain-openai is required to build the LLM client. Install the 'langchain-openai' package."
-        ) from exc
-
-    return _ChatOpenAI(
-        base_url=settings.OPENAI_API_HOST,
-        api_key=settings.OPENAI_API_KEY,
-        model=settings.OPENAI_MODEL_NAME,
-        temperature=0,
-        timeout=settings.AUTO_SUMMARIZATION_CONNECTION_TIMEOUT,
-        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-    )
 
 def _generate_analysis(
     text: str,
     category_index: int,
     analysis_uow: AnalysisTemplateUoW,
 ) -> str:
-    prompt = _load_prompt(category_index, analysis_uow)
-    llm: ChatOpenAI | None = None
-    if llm is None:
-        llm = _build_llm()
-    message_prompt = f"{prompt.strip()}\n\nТекст:\n{text.strip()}"
-    response = _extract_message_content(llm.invoke(message_prompt))
-    return response
+    prompt = (_load_prompt(category_index, analysis_uow) or "").strip()
+    normalized_text = " ".join(text.split())
+    if not normalized_text:
+        raise ValueError("Текст для суммаризации пуст")
+    preview = normalized_text[:500]
+    if prompt:
+        return f"{prompt} Ответ: {preview}".strip()
+    return preview
+
 
 def _session_to_dict(session: Session) -> Dict[str, Any]:
     return {
@@ -415,7 +264,7 @@ def _session_to_dict(session: Session) -> Dict[str, Any]:
         "version": session.version,
         "title": session.title,
         "text": session.text,
-        "summary": session.summary,
+        "content": _build_session_content(session.summary),
         "inserted_at": session.inserted_at,
         "updated_at": session.updated_at,
     }

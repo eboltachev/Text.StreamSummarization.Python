@@ -1,16 +1,23 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
+from auto_summarization.entrypoints.schemas import BaseModel
 
 class LoadedDocumentInfo(BaseModel):
-    input_id: int
+    input_id: str
     text: str
 
 class LoadDocumentResponse(BaseModel):
     result: List[LoadedDocumentInfo]
 
+class AnalyzeCategory(BaseModel):
+    index: int
+    category: str
+    prompt: str
+    model_type: Optional[str] = None
+
+
 class AnalyzeTypesResponse(BaseModel):
-    categories: List[str]
+    categories: List[AnalyzeCategory]
 
 class AnalyzeErrorResponse(BaseModel):
     detail: str

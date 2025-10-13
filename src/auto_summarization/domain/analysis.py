@@ -15,7 +15,7 @@ class AnalysisTemplate(IDomain):
         model_type: Optional[str] = None,
     ) -> None:
         self.template_id = template_id
-        self.choice_index = choice_index
+        self.category_index = category_index
         self.category = category
         self.prompt = prompt
         self.model_type = model_type
@@ -23,7 +23,7 @@ class AnalysisTemplate(IDomain):
     def to_dict(self) -> dict:
         return {
             "template_id": self.template_id,
-            "choice_index": self.choice_index,
+            "category_index": self.category_index,
             "category": self.category,
             "prompt": self.prompt,
             "model_type": self.model_type,

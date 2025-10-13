@@ -1,177 +1,145 @@
+import asyncio
+import inspect
 import os
-import re
-import shutil
-import subprocess
-from contextlib import closing
-from time import sleep
-from typing import Any, Dict, Iterable, List
+from io import BytesIO
+from pathlib import Path
 from uuid import uuid4
 
-import psycopg2
-from psycopg2 import OperationalError
-from psycopg2.extras import RealDictCursor
 import pytest
-import requests
-from conftest import authorization
-from dotenv import load_dotenv
+try:  # pragma: no cover - prefer real FastAPI when present
+    from fastapi import HTTPException, UploadFile
+except ModuleNotFoundError:  # pragma: no cover - lightweight fallback for tests
+    from auto_summarization.entrypoints.routers import analysis as analysis_router
+    from auto_summarization.entrypoints.routers import session as session_router
 
-load_dotenv()
+    HTTPException = (analysis_router.HTTPException, session_router.HTTPException)
+    UploadFile = analysis_router.UploadFile
+
+TEST_DB_PATH = Path(__file__).resolve().parents[1] / "test.db"
+if TEST_DB_PATH.exists():
+    TEST_DB_PATH.unlink()
+
+os.environ.setdefault("AUTO_SUMMARIZATION_DB_TYPE", "sqlite")
+os.environ.setdefault("AUTO_SUMMARIZATION_DB_NAME", str(TEST_DB_PATH))
+os.environ.setdefault(
+    "AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH",
+    str(Path(__file__).resolve().parents[1] / "analyze_types.json"),
+)
+
+from auto_summarization.entrypoints.routers import analysis, session  # noqa: E402
+from auto_summarization.entrypoints.schemas.session import (  # noqa: E402
+    CreateSessionRequest,
+    UpdateSessionSummarizationRequest,
+)
+from auto_summarization.services.config import register_analysis_templates  # noqa: E402
+
+register_analysis_templates()
 
 
-@pytest.mark.asyncio
-class TestAPI:
-    def setup_class(self):
-        if shutil.which("docker") is None:
-            pytest.skip("Docker is required to run integration tests", allow_module_level=True)
-        self._sleep = 1
-        self._timeout = 30
-        self._compose_file = "docker-compose.yml"
-        self._content_file_path = "dev/content.txt"
-        os.makedirs("dev", exist_ok=True)
-        self._cwd = os.getcwd()
-        with open(self._content_file_path, "w") as content_file:
-            content_file.write("**Logs**\n\n")
-        with open(self._content_file_path, "a") as content_file:
-            subprocess.run(
-                ["docker", "compose", "-f", self._compose_file, "up", "--build", "-d"],
-                stdout=content_file,
-                stderr=content_file,
-            )
-        with open(self._content_file_path, "a") as content_file:
-            subprocess.run(
-                [
-                    "printdirtree",
-                    "--exclude-dir",
-                    "tests",
-                    "hf_models",
-                    ".venv",
-                    "uv.lock",
-                    ".pytest_cache",
-                    ".mypy_cache",
-                    "--show-contents",
-                ],
-                cwd=self._cwd,
-                stdout=content_file,
-                stderr=content_file,
-            )
-        self._api_host = os.environ.get("AUTO_SUMMARIZATION_API_HOST", "localhost")
-        self._api_port = os.environ.get("AUTO_SUMMARIZATION_API_PORT", 8000)
-        self._api_url = f"http://{self._api_host}:{self._api_port}"
-        self._prefix = os.environ.get("AUTO_SUMMARIZATION_URL_PREFIX", "/v1")
-        self._headers = {authorization: str(uuid4())}
-        self._id_pattern = r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
+@pytest.fixture(scope="module", autouse=True)
+def cleanup_db():
+    yield
+    if TEST_DB_PATH.exists():
+        TEST_DB_PATH.unlink()
 
-        db_host = os.environ.get("AUTO_SUMMARIZATION_DB_HOST", "localhost")
-        self._db_host = self._normalize_host(db_host)
-        self._db_port = int(os.environ.get("AUTO_SUMMARIZATION_DB_PORT", 5432))
-        self._db_name = os.environ.get("AUTO_SUMMARIZATION_DB_NAME", "autosummarization")
-        self._db_user = os.environ.get("AUTO_SUMMARIZATION_DB_USER", "autosummary")
-        self._db_password = os.environ.get("AUTO_SUMMARIZATION_DB_PASSWORD")
-        if not self._db_password:
-            pytest.skip("Database credentials are required to run integration tests", allow_module_level=True)
-        self._db_connect_kwargs = {
-            "host": self._db_host,
-            "port": self._db_port,
-            "dbname": self._db_name,
-            "user": self._db_user,
-            "password": self._db_password,
-        }
 
-        connection = False
-        timeout_counter = 0
-        while not connection:
-            try:
-                requests.get(self._api_url)
-                connection = True
-            except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
-                sleep(self._sleep)
-                timeout_counter += 1
-                if timeout_counter > self._timeout:
-                    with open(self._content_file_path, "a") as content_file:
-                        subprocess.run(
-                            ["docker", "compose", "-f", self._compose_file, "logs"],
-                            cwd=self._cwd,
-                            stdout=content_file,
-                            stderr=content_file,
-                        )
-                    subprocess.run(
-                        ["docker", "compose", "-f", self._compose_file, "down", "-v"],
-                        cwd=self._cwd,
-                        stdout=open(os.devnull, "w"),
-                        stderr=subprocess.STDOUT,
-                    )
-                    raise Exception("Setup timeout")
+@pytest.fixture
+def auth_header() -> str:
+    return str(uuid4())
 
-        db_ready = False
-        timeout_counter = 0
-        while not db_ready:
-            try:
-                with closing(psycopg2.connect(**self._db_connect_kwargs)) as connection:
-                    connection.close()
-                db_ready = True
-            except OperationalError:
-                sleep(self._sleep)
-                timeout_counter += 1
-                if timeout_counter > self._timeout:
-                    pytest.skip("Database is not ready for integration tests", allow_module_level=True)
 
-    def teardown_class(self):
-        with open(self._content_file_path, "a") as content_file:
-            content_file.write(f"\n\n**Logs:**\n\n")
-        with open(self._content_file_path, "a") as content_file:
-            subprocess.run(
-                ["docker", "compose", "-f", self._compose_file, "logs"],
-                cwd=self._cwd,
-                stdout=content_file,
-                stderr=content_file,
-            )
-        subprocess.run(
-            ["docker", "compose", "-f", self._compose_file, "down", "-v"],
-            cwd=self._cwd,
-            stdout=open(os.devnull, "w"),
-            stderr=subprocess.STDOUT,
-        )
+def _make_upload_file(filename: str, content: str) -> UploadFile:
+    data = content.encode("utf-8")
+    try:
+        params = inspect.signature(UploadFile).parameters
+    except (TypeError, ValueError):  # pragma: no cover - builtins without signature
+        params = {}
+    if "file" in params:
+        return UploadFile(filename=filename, file=BytesIO(data))  # type: ignore[arg-type]
+    return UploadFile(filename, data)
 
-    @staticmethod
-    def _normalize_host(host: str | None) -> str:
-        if not host or host in {"db", "0.0.0.0"}:
-            return "localhost"
-        return host
 
-    def _db_execute(self, query: str, params: Iterable[Any] | None = None) -> List[Dict[str, Any]]:
-        with closing(psycopg2.connect(**self._db_connect_kwargs)) as connection:
-            connection.autocommit = True
-            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(query, tuple(params or ()))
-                if cursor.description is None:
-                    return []
-                return list(cursor.fetchall())
+def test_analyze_types_returns_categories() -> None:
+    response = asyncio.run(analysis.analyze_types())
+    assert len(response.categories) == 3
+    assert response.categories[0].category == "Экономика"
+    assert response.categories[1].category == "Спорт"
+    assert response.categories[2].category == "Путешествия"
 
-    def _db_fetchone(self, query: str, params: Iterable[Any] | None = None) -> Dict[str, Any] | None:
-        results = self._db_execute(query, params)
-        return results[0] if results else None
 
-    async def test_docs(self):
-        response = requests.get(f"{self._api_url}/docs")
-        assert response.status_code == 200
-        assert "FastAPI - Swagger UI" in response.text
+def test_load_documents_success() -> None:
+    documents = [
+        _make_upload_file("note1.txt", "Первый документ"),
+        _make_upload_file("note2.txt", "Второй документ"),
+    ]
+    response = asyncio.run(analysis.load_document(input_ids=["doc-1", "doc-2"], documents=documents))
+    assert [item.input_id for item in response.result] == ["doc-1", "doc-2"]
+    assert "Первый документ" in response.result[0].text
+    assert "Второй документ" in response.result[1].text
 
-    async def test_health(self):
-        response = requests.get(f"{self._api_url}/health")
-        assert response.status_code == 200
-        assert {"status": "ok"} == response.json()
 
-    async def test_analyze_types_and_load_documents(self):
-        # to-do
+def test_load_documents_mismatched_lengths() -> None:
+    documents = [_make_upload_file("note1.txt", "Первый документ")]
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(analysis.load_document(input_ids=["doc-1", "doc-2"], documents=documents))
+    assert error.value.status_code == 400
 
-    async def test_session_create_performs_analysis(self):
-        # to-do
 
-    async def test_users_and_sessions(self):
-        # to-do
+def test_create_session_success(auth_header: str) -> None:
+    request = CreateSessionRequest(text=["Компания увеличила выручку", "Планы на квартал"], category=0)
+    response = asyncio.run(session.create(request=request, auth=auth_header))
+    assert response.content is not None
+    assert "Сформулируй ключевые выводы" in (response.content.full_summary or "")
 
-    async def test_session_create_requires_authorization(self):
-        # to-do
+    page = asyncio.run(session.fetch_page(auth=auth_header))
+    assert len(page.sessions) == 1
+    assert page.sessions[0].version == 0
 
-    async def test_session_create_invalid_category(self):
-        # to-do
+
+def test_create_session_requires_authorization() -> None:
+    request = CreateSessionRequest(text=["Любой текст"], category=0)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(session.create(request=request, auth=None))
+    assert error.value.status_code == 400
+
+
+def test_update_session_success(auth_header: str) -> None:
+    create_request = CreateSessionRequest(text=["Матч завершился победой"], category=1)
+    asyncio.run(session.create(request=create_request, auth=auth_header))
+    page = asyncio.run(session.fetch_page(auth=auth_header))
+    item = page.sessions[0]
+
+    update_request = UpdateSessionSummarizationRequest(
+        session_id=item.session_id,
+        text=["Матч завершился поражением", "Команда готовится к реваншу"],
+        category=1,
+        version=item.version,
+    )
+    response = asyncio.run(session.update_summarization(request=update_request, auth=auth_header))
+    assert "перспективах участников" in (response.content.full_summary or "")
+    refreshed = asyncio.run(session.fetch_page(auth=auth_header))
+    assert refreshed.sessions[0].version == item.version + 1
+
+
+def test_update_session_version_mismatch(auth_header: str) -> None:
+    create_request = CreateSessionRequest(text=["Путешествие по Европе"], category=2)
+    asyncio.run(session.create(request=create_request, auth=auth_header))
+    page = asyncio.run(session.fetch_page(auth=auth_header))
+    item = page.sessions[0]
+
+    update_request = UpdateSessionSummarizationRequest(
+        session_id=item.session_id,
+        text=["Новая программа"],
+        category=2,
+        version=item.version + 10,
+    )
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(session.update_summarization(request=update_request, auth=auth_header))
+    assert error.value.status_code == 400
+
+
+def test_create_session_invalid_category(auth_header: str) -> None:
+    request = CreateSessionRequest(text=["Неизвестная категория"], category=99)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(session.create(request=request, auth=auth_header))
+    assert "категория" in str(error.value.detail)
