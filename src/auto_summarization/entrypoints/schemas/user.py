@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from auto_summarization.entrypoints.schemas import BaseModel
 
 
 class CreateUserRequest(BaseModel):
