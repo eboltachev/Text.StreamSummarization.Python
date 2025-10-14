@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 import math
 import sys
+import tempfile
+from collections.abc import Iterable, Sequence
 from difflib import SequenceMatcher
 from functools import lru_cache
+from pathlib import Path
 from time import time
-from collections.abc import Iterable, Sequence
-from typing import Any, Dict, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 from uuid import uuid4
 
 import httpx
@@ -47,7 +49,7 @@ def create_new_session(
     temporary: bool,
     user_uow: IUoW,
     analysis_uow: AnalysisTemplateUoW,
-) -> Tuple[str, str | None]:
+) -> Tuple[str, str, str | None]:
     logger.info("start create_new_session")
     cleaned_text = _prepare_text_chunks(text)
     now = time()
@@ -58,9 +60,9 @@ def create_new_session(
     )
 
     title_source = summary.strip() or cleaned_text[0]
-
+    session_id = str(uuid4())
     session = Session(
-        session_id=str(uuid4()),
+        session_id=session_id,
         version=0,
         title=title_source[:40],
         text=cleaned_text,
@@ -84,7 +86,7 @@ def create_new_session(
         user_uow.commit()
     logger.info("finish create_new_session")
     response = session.summary
-    return response, None
+    return session_id, response, None
 
 
 def update_session_summarization(
@@ -151,6 +153,45 @@ def update_title_session(
         user_uow.commit()
     logger.info("finish update_title_session")
     return _session_to_dict(session)
+
+
+def download_session_file(session_id: str, format: str, user_id: str, uow: IUoW) -> Path:
+    with uow:
+        user = uow.users.get(object_id=user_id)
+        if user is None:
+            raise ValueError("User not found")
+        session = user.get_session(session_id)
+        if session is None:
+            raise ValueError("Session not found")
+        title = session.title or "Untitled session"
+        query = str(session.text)
+        summary = session.summary or ""
+
+    normalized_format = format.lower()
+    if normalized_format == "pdf":
+        import os
+
+        from fpdf import FPDF
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as fp:
+            pdf = FPDF()
+            pdf.add_page()
+            font_path = os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans.ttf")
+            pdf.add_font("DejaVu", "", font_path, uni=True)
+            pdf.set_font("DejaVu", "", 12)
+            pdf.cell(0, 10, f"Session: {title}", ln=1)
+            pdf.ln(5)
+            pdf.set_font("DejaVu", "", 11)
+            pdf.multi_cell(0, 8, f"Query:\n{query}")
+            pdf.ln(2)
+            pdf.multi_cell(0, 8, f"Summary:\n{summary}")
+            pdf.output(fp.name)
+            return Path(fp.name)
+    else:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}") as fp:
+            with open(fp.name, "w", encoding="utf-8") as f:
+                f.write(f"{query} : {summary}")
+            return Path(fp.name)
 
 
 def delete_exist_session(session_id: str, user_id: str, uow: IUoW) -> StatusType:
@@ -282,9 +323,7 @@ def _apply_map_reduce(text: str, context_window: int) -> str:
         from langchain.docstore.document import Document  # type: ignore
         from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
     except ModuleNotFoundError:
-        logger.warning(
-            "LangChain is not installed; skipping map-reduce summarization and returning the original text."
-        )
+        logger.warning("LangChain is not installed; skipping map-reduce summarization and returning the original text.")
         return text
 
     chunk_size = max(200, context_window * 4)
@@ -409,6 +448,7 @@ def _build_llm() -> "ChatOpenAI":
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
+
 def _prepare_text_chunks(chunks: Iterable[str]) -> List[str]:
     if isinstance(chunks, str) or not isinstance(chunks, Iterable):
         raise ValueError("Текст должен быть передан списком строк")
@@ -439,6 +479,7 @@ def _generate_analysis(
     message_prompt = f"{prompt.strip()}\n\nТексты:\n{sanitized_text.strip()}"
     response = _extract_message_content(llm.invoke(message_prompt))
     return response
+
 
 def _session_to_dict(session: Session) -> Dict[str, Any]:
     return {
