@@ -21,7 +21,7 @@ class SessionInfo(BaseModel):
     session_id: str
     version: int
     title: str
-    text: str
+    text: List[str]
     summary: str
     inserted_at: float
     updated_at: float
@@ -41,7 +41,7 @@ class CreateSessionResponse(BaseModel):
 
 class UpdateSessionSummarizationRequest(BaseModel):
     session_id: str
-    text: str
+    text: List[str]
     category: int
     version: int
 

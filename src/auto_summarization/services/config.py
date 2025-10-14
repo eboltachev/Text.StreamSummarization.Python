@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 from json import JSONDecodeError
@@ -176,15 +178,31 @@ def register_analysis_templates(session: Session = session_factory()):
         return
 
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except JSONDecodeError as exc:
+            logger.error("Failed to parse analyze types configuration: %s", exc)
+            return
+
         session.query(AnalysisTemplate).delete()
         session.commit()
-        for # to-do in enumerate(payload.get("types", [])):
 
+        types = payload.get("types", []) if isinstance(payload, dict) else []
+        for index, item in enumerate(types):
+            category = str(item.get("category", "")).strip()
+            prompt = str(item.get("prompt", "")).strip()
+            if not category or not prompt:
+                logger.warning(
+                    "Skipping analyze template at index %s due to missing category or prompt",
+                    index,
+                )
+                continue
 
             template = AnalysisTemplate(
                 template_id=str(uuid4()),
-                # to-do
+                category_index=index,
+                category=category,
+                prompt=prompt,
             )
             session.add(template)
         session.commit()

@@ -6,7 +6,8 @@ import sys
 from difflib import SequenceMatcher
 from functools import lru_cache
 from time import time
-from typing import Any, Dict, Iterable, List, Tuple, TYPE_CHECKING
+from collections.abc import Iterable, Sequence
+from typing import Any, Dict, List, Tuple, TYPE_CHECKING
 from uuid import uuid4
 
 import httpx
@@ -41,25 +42,28 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
 
 def create_new_session(
     user_id: str,
-    text: List[str],
+    text: Sequence[str],
     category_index: int,
     temporary: bool,
     user_uow: IUoW,
     analysis_uow: AnalysisTemplateUoW,
-) -> Tuple[Dict[str, Any], str | None]:
+) -> Tuple[str, str | None]:
     logger.info("start create_new_session")
+    cleaned_text = _prepare_text_chunks(text)
     now = time()
     summary = _generate_analysis(
-        text=text,
+        text=cleaned_text,
         category_index=category_index,
         analysis_uow=analysis_uow,
     )
 
+    title_source = summary.strip() or cleaned_text[0]
+
     session = Session(
         session_id=str(uuid4()),
         version=0,
-        title=f"{summary[:40]}" or text[:40],
-        text=text,
+        title=title_source[:40],
+        text=cleaned_text,
         summary=summary,
         inserted_at=now,
         updated_at=now,
@@ -86,12 +90,12 @@ def create_new_session(
 def update_session_summarization(
     user_id: str,
     session_id: str,
-    text: str,
+    text: Sequence[str],
     category_index: int,
     version: int,
     user_uow: IUoW,
     analysis_uow: AnalysisTemplateUoW,
-) -> Tuple[Dict[str, Any], str | None]:
+) -> Tuple[str, str | None]:
     logger.info("start update_session_summarization")
     with user_uow:
         user = user_uow.users.get(object_id=user_id)
@@ -104,11 +108,14 @@ def update_session_summarization(
             raise ValueError("Version mismatch")
         now = time()
 
+        cleaned_text = _prepare_text_chunks(text)
+
         summary = _generate_analysis(
-            text=text,
+            text=cleaned_text,
             category_index=category_index,
-            analysis_uow=analysis_uow
+            analysis_uow=analysis_uow,
         )
+        session.update_text(cleaned_text)
         session.summary = summary
         session.version = version + 1
         session.updated_at = now
@@ -175,9 +182,9 @@ def search_similarity_sessions(user_id: str, query: str, uow: IUoW) -> List[Dict
             session_query = getattr(session, "query", None)
             if session_query:
                 parts.append(session_query or "")
-            text_value = getattr(session, "text", "")
+            text_value = getattr(session, "text_chunks", [])
             if text_value:
-                parts.append(text_value)
+                parts.extend(text_value)
             translation_value = getattr(session, "summary", None)
             if translation_value:
                 parts.append(translation_value)
@@ -188,7 +195,7 @@ def search_similarity_sessions(user_id: str, query: str, uow: IUoW) -> List[Dict
             results.append(
                 {
                     "title": session.title or "",
-                    "query": session_query or text_value or "",
+                    "query": session_query or (text_value[0] if text_value else ""),
                     "summary": translation_value or "",
                     "inserted_at": float(session.inserted_at),
                     "session_id": session.session_id,
@@ -373,8 +380,11 @@ def _load_prompt(
     analysis_uow: AnalysisTemplateUoW,
 ) -> str:
     with analysis_uow:
-        prompt = # to-do
-    return prompt
+        templates = analysis_uow.templates.list_by_category(category_index)
+    if not templates:
+        raise ValueError("Prompt template not found for the given category")
+    template = sorted(templates, key=lambda item: item.template_id)[0]
+    return template.prompt
 
 
 def _build_llm() -> "ChatOpenAI":
@@ -396,8 +406,24 @@ def _build_llm() -> "ChatOpenAI":
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
+def _prepare_text_chunks(chunks: Iterable[str]) -> List[str]:
+    if isinstance(chunks, str) or not isinstance(chunks, Iterable):
+        raise ValueError("Текст должен быть передан списком строк")
+
+    cleaned: List[str] = []
+    for chunk in chunks:
+        value = str(chunk).strip()
+        if value:
+            cleaned.append(value)
+
+    if not cleaned:
+        raise ValueError("Передан пустой текст для суммаризации")
+
+    return cleaned
+
+
 def _generate_analysis(
-    text: str,
+    text: Sequence[str],
     category_index: int,
     analysis_uow: AnalysisTemplateUoW,
 ) -> str:
@@ -405,7 +431,9 @@ def _generate_analysis(
     llm: ChatOpenAI | None = None
     if llm is None:
         llm = _build_llm()
-    message_prompt = f"{prompt.strip()}\n\nТекст:\n{text.strip()}"
+    combined_text = "\n\n".join(text)
+    sanitized_text = _sanitize_prompt_text(combined_text)
+    message_prompt = f"{prompt.strip()}\n\nТексты:\n{sanitized_text.strip()}"
     response = _extract_message_content(llm.invoke(message_prompt))
     return response
 
@@ -414,7 +442,7 @@ def _session_to_dict(session: Session) -> Dict[str, Any]:
         "session_id": session.session_id,
         "version": session.version,
         "title": session.title,
-        "text": session.text,
+        "text": session.text_chunks,
         "summary": session.summary,
         "inserted_at": session.inserted_at,
         "updated_at": session.updated_at,
