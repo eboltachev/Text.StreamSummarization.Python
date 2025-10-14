@@ -5,13 +5,8 @@ from typing import List
 from pydantic import BaseModel
 
 
-class LoadedDocumentInfo(BaseModel):
-    document_id: str
-    text: str
-
-
 class LoadDocumentResponse(BaseModel):
-    result: List[LoadedDocumentInfo]
+    contents: List[str]
 
 
 class AnalyzeCategory(BaseModel):
