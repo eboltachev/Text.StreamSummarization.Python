@@ -381,10 +381,13 @@ def _load_prompt(
 ) -> str:
     with analysis_uow:
         templates = analysis_uow.templates.list_by_category(category_index)
-    if not templates:
-        raise ValueError("Prompt template not found for the given category")
-    template = sorted(templates, key=lambda item: item.template_id)[0]
-    return template.prompt
+        if not templates:
+            raise ValueError("Prompt template not found for the given category")
+
+        template = min(templates, key=lambda item: item.template_id)
+        prompt = template.prompt
+
+    return prompt
 
 
 def _build_llm() -> "ChatOpenAI":
