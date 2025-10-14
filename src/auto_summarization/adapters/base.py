@@ -1,4 +1,5 @@
 import abc
+import abc
 from typing import Optional
 
 from auto_summarization.domain.base import IDomain

@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import os
 import tempfile
+from collections import OrderedDict
 from typing import Dict, List, Tuple
 
 from auto_summarization.services.config import settings
@@ -75,7 +76,20 @@ def extract_text(content: bytes, extension: str) -> str:
 
     raise ValueError("Unsupported document format")
 
-def get_analyze_types(uow: AnalysisTemplateUoW) -> str:
+def get_analyze_types(
+    uow: AnalysisTemplateUoW,
+) -> Tuple[List[Dict[str, int | str]], List[Dict[str, int | str]]]:
     with uow:
-        prompt = # to-do
-    return prompt
+        templates = sorted(uow.templates.list(), key=lambda item: item.category_index)
+
+    category_map: "OrderedDict[int, Dict[str, int | str]]" = OrderedDict()
+    choices: List[Dict[str, int | str]] = []
+
+    for template in templates:
+        category_map.setdefault(
+            template.category_index,
+            {"index": template.category_index, "name": template.category},
+        )
+        choices.append({"index": template.category_index, "prompt": template.prompt})
+
+    return list(category_map.values()), choices
