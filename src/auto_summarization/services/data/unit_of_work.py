@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 
 from auto_summarization.adapters.repository import AnalysisTemplateRepository, SessionRepository, UserRepository
-from auto_summarization.services.config import session_factory
+from auto_summarization.services.config import register_analysis_templates, session_factory
 
 
 class IUoW(abc.ABC):
@@ -46,6 +46,7 @@ class UserUoW(IUoW):
 
 class AnalysisTemplateUoW(IUoW):
     def __enter__(self) -> AnalysisTemplateUoW:
+        register_analysis_templates()
         self.db = self.session_factory()
         self.templates = AnalysisTemplateRepository(self.db)
         return super().__enter__()

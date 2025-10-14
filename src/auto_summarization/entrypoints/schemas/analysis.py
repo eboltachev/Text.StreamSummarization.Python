@@ -7,21 +7,8 @@ from pydantic import BaseModel
 
 class LoadDocumentResponse(BaseModel):
     contents: List[str]
-
-
-class AnalyzeCategory(BaseModel):
-    index: int
-    name: str
-
-
-class AnalyzeChoice(BaseModel):
-    index: int
-    prompt: str
-
-
 class AnalyzeTypesResponse(BaseModel):
-    categories: List[AnalyzeCategory]
-    choices: List[AnalyzeChoice]
+    categories: List[str]
 
 
 class AnalyzeErrorResponse(BaseModel):
