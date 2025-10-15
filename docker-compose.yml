@@ -1,7 +1,7 @@
 services:
-  auto-summarization:
-    container_name: AutoSummarizationAPI
-    image: auto-summarization-api
+  stream-summarization:
+    container_name: StreamSummarizationAPI
+    image: stream-summarization-api
     build:
       context: .
       dockerfile: Dockerfile
@@ -20,7 +20,7 @@ services:
 
   db:
     image: postgres:15
-    container_name: AutoSummarizationDB
+    container_name: StreamSummarizationDB
     environment:
       POSTGRES_USER: ${AUTO_SUMMARIZATION_DB_USER}
       POSTGRES_PASSWORD: ${AUTO_SUMMARIZATION_DB_PASSWORD}
@@ -29,7 +29,7 @@ services:
     ports:
       - "${AUTO_SUMMARIZATION_DB_PORT}:${AUTO_SUMMARIZATION_DB_PORT}"
     volumes:
-      - auto_summarization_data:/var/lib/postgresql/data
+      - stream_summarization_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $AUTO_SUMMARIZATION_DB_USER -d $AUTO_SUMMARIZATION_DB_NAME"]
       interval: 5s
@@ -38,4 +38,4 @@ services:
     restart: no
 
 volumes:
-  auto_summarization_data:
+  stream_summarization_data:
