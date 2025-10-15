@@ -93,6 +93,7 @@ config_stub = types.ModuleType("auto_summarization.services.config")
 config_stub.settings = types.SimpleNamespace(
     AUTO_SUMMARIZATION_SUPPORTED_FORMATS=("txt", "doc", "docx", "pdf", "odt"),
     AUTO_SUMMARIZATION_MAX_SESSIONS=100,
+    AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "analyze_types.json"),
     OPENAI_MODEL_NAME="test-model",
     AUTO_SUMMARIZATION_CONNECTION_TIMEOUT=60,
     OPENAI_API_KEY="test-key",
@@ -100,6 +101,7 @@ config_stub.settings = types.SimpleNamespace(
 config_stub.authorization = "Authorization"
 config_stub.Session = sys.modules["sqlalchemy"].FakeSession
 config_stub.session_factory = lambda *args, **kwargs: sys.modules["sqlalchemy"].FakeSession()
+config_stub.register_analysis_templates = lambda *args, **kwargs: None
 sys.modules["auto_summarization.services.config"] = config_stub
 if "auto_summarization.services" in sys.modules:
     setattr(sys.modules["auto_summarization.services"], "config", config_stub)
@@ -254,9 +256,9 @@ def _create_user_id() -> str:
 
 
 def test_get_analyze_types_and_extract_texts(template_uow: InMemoryAnalysisTemplateUoW) -> None:
-    categories, choices = analysis_handler.get_analyze_types(template_uow)
-    assert categories and choices
-    assert len(categories) == len(choices)
+    categories = analysis_handler.get_analyze_types(template_uow)
+    assert categories
+    assert all(isinstance(category, str) for category in categories)
     documents = {
         "doc-1": analysis_handler.extract_text(b"First document", "txt"),
         "doc-2": analysis_handler.extract_text(b"Second document", "txt"),
@@ -272,7 +274,7 @@ def test_create_session_success(
     template_uow: InMemoryAnalysisTemplateUoW,
 ) -> None:
     user_id = _create_user_id()
-    summary, error = session_handler.create_new_session(
+    session_id, summary, error = session_handler.create_new_session(
         user_id=user_id,
         text=["Первый текст", "Второй текст"],
         category_index=0,
@@ -280,11 +282,13 @@ def test_create_session_success(
         user_uow=user_uow,
         analysis_uow=template_uow,
     )
+    assert session_id
     assert summary == "summary-1"
     assert error is None
     assert llm_stub.calls
     sessions = session_handler.get_session_list(user_id=user_id, uow=user_uow)
     assert len(sessions) == 1
+    assert sessions[0]["session_id"] == session_id
     assert sessions[0]["text"] == ["Первый текст", "Второй текст"]
 
 
@@ -294,7 +298,7 @@ def test_update_session_and_search(
     template_uow: InMemoryAnalysisTemplateUoW,
 ) -> None:
     user_id = _create_user_id()
-    summary, _ = session_handler.create_new_session(
+    session_id, summary, _ = session_handler.create_new_session(
         user_id=user_id,
         text=["Исходный текст"],
         category_index=0,
@@ -304,7 +308,7 @@ def test_update_session_and_search(
     )
     assert summary == "summary-1"
     sessions = session_handler.get_session_list(user_id=user_id, uow=user_uow)
-    session_id = sessions[0]["session_id"]
+    assert sessions[0]["session_id"] == session_id
     summary, _ = session_handler.update_session_summarization(
         user_id=user_id,
         session_id=session_id,
