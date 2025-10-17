@@ -256,9 +256,9 @@ def _create_user_id() -> str:
 
 
 def test_get_analyze_types_and_extract_texts(template_uow: InMemoryAnalysisTemplateUoW) -> None:
-    categories = analysis_handler.get_analyze_types(template_uow)
-    assert categories
-    assert all(isinstance(category, str) for category in categories)
+    report_types = analysis_handler.get_analyze_types(template_uow)
+    assert report_types
+    assert all(isinstance(report_type, str) for report_type in report_types)
     documents = {
         "doc-1": analysis_handler.extract_text(b"First document", "txt"),
         "doc-2": analysis_handler.extract_text(b"Second document", "txt"),
