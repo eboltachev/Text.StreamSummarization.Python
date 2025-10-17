@@ -9,6 +9,8 @@ from typing import Dict, Iterable, List, Sequence
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def _install_sqlalchemy_stub() -> None:
@@ -89,22 +91,22 @@ def _install_sqlalchemy_stub() -> None:
 
 _install_sqlalchemy_stub()
 
-config_stub = types.ModuleType("auto_summarization.services.config")
+config_stub = types.ModuleType("stream_summarization.services.config")
 config_stub.settings = types.SimpleNamespace(
-    AUTO_SUMMARIZATION_SUPPORTED_FORMATS=("txt", "doc", "docx", "pdf", "odt"),
-    AUTO_SUMMARIZATION_MAX_SESSIONS=100,
-    AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "analyze_types.json"),
+    STREAM_SUMMARIZATION_SUPPORTED_FORMATS=("txt", "doc", "docx", "pdf", "odt"),
+    STREAM_SUMMARIZATION_MAX_SESSIONS=100,
+    STREAM_SUMMARIZATION_REPORT_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "report_types.json"),
     OPENAI_MODEL_NAME="test-model",
-    AUTO_SUMMARIZATION_CONNECTION_TIMEOUT=60,
+    STREAM_SUMMARIZATION_CONNECTION_TIMEOUT=60,
     OPENAI_API_KEY="test-key",
 )
 config_stub.authorization = "Authorization"
 config_stub.Session = sys.modules["sqlalchemy"].FakeSession
 config_stub.session_factory = lambda *args, **kwargs: sys.modules["sqlalchemy"].FakeSession()
-config_stub.register_analysis_templates = lambda *args, **kwargs: None
-sys.modules["auto_summarization.services.config"] = config_stub
-if "auto_summarization.services" in sys.modules:
-    setattr(sys.modules["auto_summarization.services"], "config", config_stub)
+config_stub.register_document_templates = lambda *args, **kwargs: None
+sys.modules["stream_summarization.services.config"] = config_stub
+if "stream_summarization.services" in sys.modules:
+    setattr(sys.modules["stream_summarization.services"], "config", config_stub)
 
 httpx_stub = types.ModuleType("httpx")
 
@@ -134,20 +136,20 @@ class _FakeClient:
 httpx_stub.Client = _FakeClient
 sys.modules["httpx"] = httpx_stub
 
-from auto_summarization.domain.analysis import AnalysisTemplate
-from auto_summarization.domain.user import User
-from auto_summarization.services.handlers import analysis as analysis_handler
-from auto_summarization.services.handlers import session as session_handler
+from stream_summarization.domain.documents import DocumentTemplate
+from stream_summarization.domain.user import User
+from stream_summarization.services.handlers import documents as documents_handler
+from stream_summarization.services.handlers import session as session_handler
 
-ANALYZE_PATH = Path(__file__).resolve().parents[1] / "analyze_types.json"
+REPORT_TYPES_PATH = Path(__file__).resolve().parents[1] / "report_types.json"
 
 
-def _load_templates() -> List[AnalysisTemplate]:
-    payload = json.loads(ANALYZE_PATH.read_text(encoding="utf-8"))
-    templates: List[AnalysisTemplate] = []
+def _load_templates() -> List[DocumentTemplate]:
+    payload = json.loads(REPORT_TYPES_PATH.read_text(encoding="utf-8"))
+    templates: List[DocumentTemplate] = []
     for index, item in enumerate(payload.get("types", [])):
         templates.append(
-            AnalysisTemplate(
+            DocumentTemplate(
                 template_id=str(uuid4()),
                 category_index=index,
                 category=str(item["category"]),
@@ -159,12 +161,12 @@ def _load_templates() -> List[AnalysisTemplate]:
 
 @dataclass
 class InMemoryTemplateRepository:
-    templates: List[AnalysisTemplate]
+    templates: List[DocumentTemplate]
 
-    def list(self) -> List[AnalysisTemplate]:
+    def list(self) -> List[DocumentTemplate]:
         return list(self.templates)
 
-    def list_by_category(self, category_index: int) -> List[AnalysisTemplate]:
+    def list_by_category(self, category_index: int) -> List[DocumentTemplate]:
         return [
             template
             for template in self.templates
@@ -172,11 +174,11 @@ class InMemoryTemplateRepository:
         ]
 
 
-class InMemoryAnalysisTemplateUoW:
-    def __init__(self, templates: List[AnalysisTemplate]):
+class InMemoryDocumentTemplateUoW:
+    def __init__(self, templates: List[DocumentTemplate]):
         self.templates = InMemoryTemplateRepository(templates)
 
-    def __enter__(self) -> InMemoryAnalysisTemplateUoW:
+    def __enter__(self) -> InMemoryDocumentTemplateUoW:
         return self
 
     def __exit__(self, *args) -> None:  # pragma: no cover - no cleanup required
@@ -224,8 +226,8 @@ class InMemoryUserUoW:
 
 
 @pytest.fixture()
-def template_uow() -> InMemoryAnalysisTemplateUoW:
-    return InMemoryAnalysisTemplateUoW(_load_templates())
+def template_uow() -> InMemoryDocumentTemplateUoW:
+    return InMemoryDocumentTemplateUoW(_load_templates())
 
 
 @pytest.fixture()
@@ -255,23 +257,23 @@ def _create_user_id() -> str:
     return str(uuid4())
 
 
-def test_get_analyze_types_and_extract_texts(template_uow: InMemoryAnalysisTemplateUoW) -> None:
-    report_types = analysis_handler.get_analyze_types(template_uow)
+def test_get_report_types_and_extract_texts(template_uow: InMemoryDocumentTemplateUoW) -> None:
+    report_types = documents_handler.get_report_types(template_uow)
     assert report_types
     assert all(isinstance(report_type, str) for report_type in report_types)
     documents = {
-        "doc-1": analysis_handler.extract_text(b"First document", "txt"),
-        "doc-2": analysis_handler.extract_text(b"Second document", "txt"),
+        "doc-1": documents_handler.extract_text(b"First document", "txt"),
+        "doc-2": documents_handler.extract_text(b"Second document", "txt"),
     }
     assert documents["doc-1"].startswith("First")
     with pytest.raises(ValueError):
-        analysis_handler.extract_text(b"text", "unsupported")
+        documents_handler.extract_text(b"text", "unsupported")
 
 
 def test_create_session_success(
     llm_stub,
     user_uow: InMemoryUserUoW,
-    template_uow: InMemoryAnalysisTemplateUoW,
+    template_uow: InMemoryDocumentTemplateUoW,
 ) -> None:
     user_id = _create_user_id()
     session_id, summary, error = session_handler.create_new_session(
@@ -280,7 +282,7 @@ def test_create_session_success(
         category_index=0,
         temporary=False,
         user_uow=user_uow,
-        analysis_uow=template_uow,
+        document_uow=template_uow,
     )
     assert session_id
     assert summary == "summary-1"
@@ -292,10 +294,30 @@ def test_create_session_success(
     assert sessions[0]["text"] == ["Первый текст", "Второй текст"]
 
 
+def test_get_session_details(
+    llm_stub,
+    user_uow: InMemoryUserUoW,
+    template_uow: InMemoryDocumentTemplateUoW,
+) -> None:
+    user_id = _create_user_id()
+    session_id, _, _ = session_handler.create_new_session(
+        user_id=user_id,
+        text=["Документ 1"],
+        category_index=0,
+        temporary=False,
+        user_uow=user_uow,
+        document_uow=template_uow,
+    )
+    details = session_handler.get_session_details(user_id=user_id, session_id=session_id, uow=user_uow)
+    assert details["session_id"] == session_id
+    assert isinstance(details["version"], float)
+    assert details["text"] == ["Документ 1"]
+
+
 def test_update_session_and_search(
     llm_stub,
     user_uow: InMemoryUserUoW,
-    template_uow: InMemoryAnalysisTemplateUoW,
+    template_uow: InMemoryDocumentTemplateUoW,
 ) -> None:
     user_id = _create_user_id()
     session_id, summary, _ = session_handler.create_new_session(
@@ -304,7 +326,7 @@ def test_update_session_and_search(
         category_index=0,
         temporary=False,
         user_uow=user_uow,
-        analysis_uow=template_uow,
+        document_uow=template_uow,
     )
     assert summary == "summary-1"
     sessions = session_handler.get_session_list(user_id=user_id, uow=user_uow)
@@ -316,7 +338,7 @@ def test_update_session_and_search(
         category_index=0,
         version=sessions[0]["version"],
         user_uow=user_uow,
-        analysis_uow=template_uow,
+        document_uow=template_uow,
     )
     assert summary == "summary-2"
     updated = session_handler.get_session_list(user_id=user_id, uow=user_uow)[0]
@@ -345,7 +367,7 @@ def test_update_session_and_search(
 def test_create_session_rejects_empty_text(
     payload: Sequence[str],
     user_uow: InMemoryUserUoW,
-    template_uow: InMemoryAnalysisTemplateUoW,
+    template_uow: InMemoryDocumentTemplateUoW,
 ) -> None:
     with pytest.raises(ValueError):
         session_handler.create_new_session(
@@ -354,13 +376,13 @@ def test_create_session_rejects_empty_text(
             category_index=0,
             temporary=False,
             user_uow=user_uow,
-            analysis_uow=template_uow,
+            document_uow=template_uow,
         )
 
 
 def test_create_session_invalid_category(
     user_uow: InMemoryUserUoW,
-    template_uow: InMemoryAnalysisTemplateUoW,
+    template_uow: InMemoryDocumentTemplateUoW,
 ) -> None:
     with pytest.raises(ValueError):
         session_handler.create_new_session(
@@ -369,5 +391,41 @@ def test_create_session_invalid_category(
             category_index=999,
             temporary=False,
             user_uow=user_uow,
-            analysis_uow=template_uow,
+            document_uow=template_uow,
         )
+
+
+def test_chat_session_router_exposes_get_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    from stream_summarization.entrypoints.routers import chat_session
+
+    expected = {
+        "session_id": "sess-1",
+        "version": 1.0,
+        "title": "Заголовок",
+        "text": ["Документ"],
+        "summary": "Сводка",
+        "inserted_at": 123.0,
+        "updated_at": 456.0,
+    }
+
+    class DummyUoW:
+        def __enter__(self) -> DummyUoW:
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+    monkeypatch.setattr(chat_session, "UserUoW", lambda: DummyUoW())
+    monkeypatch.setattr(
+        chat_session,
+        "get_session_details",
+        lambda user_id, session_id, uow: expected,
+    )
+
+    app = FastAPI()
+    app.include_router(chat_session.router, prefix="/v1/chat_session")
+    client = TestClient(app)
+
+    response = client.get("/v1/chat_session/sess-1", headers={"Authorization": "user-1"})
+    assert response.status_code == 200
+    assert response.json() == expected

@@ -8,9 +8,9 @@ services:
     volumes:
       - ./dev/debug:/app/debug
       - ./models:/app/models
-      - ./analyze_types.json:/app/analyze_types.json:ro
+      - ./report_types.json:/app/report_types.json:ro
     ports:
-      - "${AUTO_SUMMARIZATION_API_PORT}:${AUTO_SUMMARIZATION_API_PORT}"
+      - "${STREAM_SUMMARIZATION_API_PORT}:${STREAM_SUMMARIZATION_API_PORT}"
     env_file:
       - ./.env
     restart: no
@@ -22,16 +22,16 @@ services:
     image: postgres:15
     container_name: StreamSummarizationDB
     environment:
-      POSTGRES_USER: ${AUTO_SUMMARIZATION_DB_USER}
-      POSTGRES_PASSWORD: ${AUTO_SUMMARIZATION_DB_PASSWORD}
-      POSTGRES_DB: ${AUTO_SUMMARIZATION_DB_NAME}
-      PGPORT: ${AUTO_SUMMARIZATION_DB_PORT}
+      POSTGRES_USER: ${STREAM_SUMMARIZATION_DB_USER}
+      POSTGRES_PASSWORD: ${STREAM_SUMMARIZATION_DB_PASSWORD}
+      POSTGRES_DB: ${STREAM_SUMMARIZATION_DB_NAME}
+      PGPORT: ${STREAM_SUMMARIZATION_DB_PORT}
     ports:
-      - "${AUTO_SUMMARIZATION_DB_PORT}:${AUTO_SUMMARIZATION_DB_PORT}"
+      - "${STREAM_SUMMARIZATION_DB_PORT}:${STREAM_SUMMARIZATION_DB_PORT}"
     volumes:
       - stream_summarization_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $AUTO_SUMMARIZATION_DB_USER -d $AUTO_SUMMARIZATION_DB_NAME"]
+      test: ["CMD-SHELL", "pg_isready -U $STREAM_SUMMARIZATION_DB_USER -d $STREAM_SUMMARIZATION_DB_NAME"]
       interval: 5s
       timeout: 5s
       retries: 5

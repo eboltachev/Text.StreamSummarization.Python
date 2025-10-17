@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import List, Tuple
 from uuid import uuid4
 
-from auto_summarization.adapters.orm import metadata, start_mappers
-from auto_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.adapters.orm import metadata, start_mappers
+from stream_summarization.domain.documents import DocumentTemplate
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings.sources import (
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
             file_secret_settings,
         )
 
-    @field_validator("AUTO_SUMMARIZATION_SUPPORTED_FORMATS", mode="before")
+    @field_validator("STREAM_SUMMARIZATION_SUPPORTED_FORMATS", mode="before")
     @classmethod
     def parse_formats(cls, value: str | List[str] | Tuple[str, ...]) -> Tuple[str, ...]:
         if isinstance(value, str):
@@ -91,30 +91,30 @@ class Settings(BaseSettings):
             formats = [str(item).strip().lower() for item in value if str(item).strip()]
         return tuple(sorted(set(formats), key=formats.index))
 
-    AUTO_SUMMARIZATION_SUPPORTED_FORMATS: Tuple[str, ...] = Field(
+    STREAM_SUMMARIZATION_SUPPORTED_FORMATS: Tuple[str, ...] = Field(
         default=("txt", "doc", "docx", "pdf", "odt"), description="Allowed document formats"
     )
-    AUTO_SUMMARIZATION_MAX_SESSIONS: int = Field(default=100, description="Max sessions per user")
-    AUTO_SUMMARIZATION_URL_PREFIX: str = Field(default="/v1", description="API URL prefix")
-    AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH: str = Field(
-        default="/app/analyze_types.json", description="Path to analyze types configuration"
+    STREAM_SUMMARIZATION_MAX_SESSIONS: int = Field(default=100, description="Max sessions per user")
+    STREAM_SUMMARIZATION_URL_PREFIX: str = Field(default="/v1", description="API URL prefix")
+    STREAM_SUMMARIZATION_REPORT_TYPES_PATH: str = Field(
+        default="/app/report_types.json", description="Path to report types configuration"
     )
-    AUTO_SUMMARIZATION_CONNECTION_TIMEOUT: int = Field(
+    STREAM_SUMMARIZATION_CONNECTION_TIMEOUT: int = Field(
         default=60, description="Timeout for knowledge base model requests"
     )
-    AUTO_SUMMARIZATION_DB_TYPE: str = Field(default="postgresql", description="DB type")
-    AUTO_SUMMARIZATION_DB_HOST: str = Field(default="db", description="DB host")
-    AUTO_SUMMARIZATION_DB_PORT: int = Field(default=5432, description="DB port")
-    AUTO_SUMMARIZATION_DB_NAME: str = Field(default="autosummarization", description="DB name")
-    AUTO_SUMMARIZATION_DB_USER: str = Field(default="autosummary", description="DB user")
-    AUTO_SUMMARIZATION_DB_PASSWORD: str | None = Field(
+    STREAM_SUMMARIZATION_DB_TYPE: str = Field(default="postgresql", description="DB type")
+    STREAM_SUMMARIZATION_DB_HOST: str = Field(default="db", description="DB host")
+    STREAM_SUMMARIZATION_DB_PORT: int = Field(default=5432, description="DB port")
+    STREAM_SUMMARIZATION_DB_NAME: str = Field(default="streamsummarization", description="DB name")
+    STREAM_SUMMARIZATION_DB_USER: str = Field(default="streamsummary", description="DB user")
+    STREAM_SUMMARIZATION_DB_PASSWORD: str | None = Field(
         default=None, description="DB password (optional for local development)"
     )
     OPENAI_API_HOST: str = Field(
         default="http://localhost:8000/v1", description="OpenAI compatible endpoint"
     )
     OPENAI_API_KEY: str | None = Field(default=None, description="API key for universal model")
-    OPENAI_MODEL_NAME: str = Field(default="Qwen/Qwen3-4B-AWQ", description="Model name for universal analysis")
+    OPENAI_MODEL_NAME: str = Field(default="Qwen/Qwen3-4B-AWQ", description="Model name for universal document insights")
     DEBUG: int = Field(default=0, description="Debug mode flag")
 
     class Config:
@@ -129,20 +129,20 @@ authorization = "Authorization" if not settings.DEBUG else "user_id"
 
 
 def _build_db_uri(config: Settings) -> str:
-    db_type = (config.AUTO_SUMMARIZATION_DB_TYPE or "").lower()
+    db_type = (config.STREAM_SUMMARIZATION_DB_TYPE or "").lower()
     if db_type.startswith("sqlite"):
-        db_name = config.AUTO_SUMMARIZATION_DB_NAME
+        db_name = config.STREAM_SUMMARIZATION_DB_NAME
         if db_name.startswith("sqlite://"):
             return db_name
         return f"sqlite:///{db_name}"
-    if config.AUTO_SUMMARIZATION_DB_PASSWORD is None:
+    if config.STREAM_SUMMARIZATION_DB_PASSWORD is None:
         logger.warning(
             "Database password is not configured; using an in-memory SQLite database for temporary storage."
         )
         return "sqlite:///:memory:"
     return (
-        f"{config.AUTO_SUMMARIZATION_DB_TYPE}://{config.AUTO_SUMMARIZATION_DB_USER}:{config.AUTO_SUMMARIZATION_DB_PASSWORD}@"
-        f"{config.AUTO_SUMMARIZATION_DB_HOST}:{config.AUTO_SUMMARIZATION_DB_PORT}/{config.AUTO_SUMMARIZATION_DB_NAME}"
+        f"{config.STREAM_SUMMARIZATION_DB_TYPE}://{config.STREAM_SUMMARIZATION_DB_USER}:{config.STREAM_SUMMARIZATION_DB_PASSWORD}@"
+        f"{config.STREAM_SUMMARIZATION_DB_HOST}:{config.STREAM_SUMMARIZATION_DB_PORT}/{config.STREAM_SUMMARIZATION_DB_NAME}"
     )
 
 
@@ -171,8 +171,8 @@ start_mappers()
 session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def register_analysis_templates(session: Session = session_factory()):
-    path = Path(settings.AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH)
+def register_document_templates(session: Session = session_factory()):
+    path = Path(settings.STREAM_SUMMARIZATION_REPORT_TYPES_PATH)
     if not path.exists():
         session.close()
         return
@@ -181,10 +181,10 @@ def register_analysis_templates(session: Session = session_factory()):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except JSONDecodeError as exc:
-            logger.error("Failed to parse analyze types configuration: %s", exc)
+            logger.error("Failed to parse report types configuration: %s", exc)
             return
 
-        session.query(AnalysisTemplate).delete()
+        session.query(DocumentTemplate).delete()
         session.commit()
 
         types = payload.get("types", []) if isinstance(payload, dict) else []
@@ -198,7 +198,7 @@ def register_analysis_templates(session: Session = session_factory()):
                 )
                 continue
 
-            template = AnalysisTemplate(
+            template = DocumentTemplate(
                 template_id=str(uuid4()),
                 category_index=index,
                 category=category,
@@ -210,4 +210,4 @@ def register_analysis_templates(session: Session = session_factory()):
         session.close()
 
 
-register_analysis_templates()
+register_document_templates()

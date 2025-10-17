@@ -14,11 +14,11 @@ from uuid import uuid4
 
 import httpx
 
-from auto_summarization.domain.enums import StatusType
-from auto_summarization.domain.session import Session
-from auto_summarization.domain.user import User
-from auto_summarization.services.config import settings
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW, IUoW
+from stream_summarization.domain.enums import StatusType
+from stream_summarization.domain.session import Session
+from stream_summarization.domain.user import User
+from stream_summarization.services.config import settings
+from stream_summarization.services.data.unit_of_work import DocumentTemplateUoW, IUoW
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,10 +36,21 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
         user = uow.users.get(object_id=user_id)
         if not user:
             return []
-        for session in user.get_sessions()[: settings.AUTO_SUMMARIZATION_MAX_SESSIONS]:
+        for session in user.get_sessions()[: settings.STREAM_SUMMARIZATION_MAX_SESSIONS]:
             sessions.append(_session_to_dict(session))
     logger.info("finish get_session_list")
     return sessions
+
+
+def get_session_details(user_id: str, session_id: str, uow: IUoW) -> Dict[str, Any]:
+    with uow:
+        user = uow.users.get(object_id=user_id)
+        if user is None:
+            raise ValueError("User not found")
+        session = user.get_session(session_id)
+        if session is None:
+            raise ValueError("Session not found")
+        return _session_to_dict(session)
 
 
 def create_new_session(
@@ -48,15 +59,15 @@ def create_new_session(
     category_index: int,
     temporary: bool,
     user_uow: IUoW,
-    analysis_uow: AnalysisTemplateUoW,
+    document_uow: DocumentTemplateUoW,
 ) -> Tuple[str, str, str | None]:
     logger.info("start create_new_session")
     cleaned_text = _prepare_text_chunks(text)
     now = time()
-    summary = _generate_analysis(
+    summary = _generate_document_summary(
         text=cleaned_text,
         category_index=category_index,
-        analysis_uow=analysis_uow,
+        document_uow=document_uow,
     )
 
     title_source = summary.strip() or cleaned_text[0]
@@ -96,7 +107,7 @@ def update_session_summarization(
     category_index: int,
     version: int,
     user_uow: IUoW,
-    analysis_uow: AnalysisTemplateUoW,
+    document_uow: DocumentTemplateUoW,
 ) -> Tuple[str, str | None]:
     logger.info("start update_session_summarization")
     with user_uow:
@@ -112,10 +123,10 @@ def update_session_summarization(
 
         cleaned_text = _prepare_text_chunks(text)
 
-        summary = _generate_analysis(
+        summary = _generate_document_summary(
             text=cleaned_text,
             category_index=category_index,
-            analysis_uow=analysis_uow,
+            document_uow=document_uow,
         )
         session.update_text(cleaned_text)
         session.summary = summary
@@ -277,7 +288,7 @@ def _get_context_window(model_name: str) -> int:
     base_url = settings.OPENAI_API_HOST.rstrip("/")
     model_path = f"{base_url}/models/{model_name}"
     try:
-        with httpx.Client(timeout=settings.AUTO_SUMMARIZATION_CONNECTION_TIMEOUT) as client:
+        with httpx.Client(timeout=settings.STREAM_SUMMARIZATION_CONNECTION_TIMEOUT) as client:
             response = client.get(model_path)
             response.raise_for_status()
             payload = response.json()
@@ -416,10 +427,10 @@ def _normalize_label(output: str, candidates: List[str]) -> str:
 
 def _load_prompt(
     category_index: int,
-    analysis_uow: AnalysisTemplateUoW,
+    document_uow: DocumentTemplateUoW,
 ) -> str:
-    with analysis_uow:
-        templates = analysis_uow.templates.list_by_category(category_index)
+    with document_uow:
+        templates = document_uow.templates.list_by_category(category_index)
         if not templates:
             raise ValueError("Prompt template not found for the given category")
 
@@ -444,7 +455,7 @@ def _build_llm() -> "ChatOpenAI":
         api_key=settings.OPENAI_API_KEY,
         model=settings.OPENAI_MODEL_NAME,
         temperature=0,
-        timeout=settings.AUTO_SUMMARIZATION_CONNECTION_TIMEOUT,
+        timeout=settings.STREAM_SUMMARIZATION_CONNECTION_TIMEOUT,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
@@ -465,12 +476,12 @@ def _prepare_text_chunks(chunks: Iterable[str]) -> List[str]:
     return cleaned
 
 
-def _generate_analysis(
+def _generate_document_summary(
     text: Sequence[str],
     category_index: int,
-    analysis_uow: AnalysisTemplateUoW,
+    document_uow: DocumentTemplateUoW,
 ) -> str:
-    prompt = _load_prompt(category_index, analysis_uow)
+    prompt = _load_prompt(category_index, document_uow)
     llm: ChatOpenAI | None = None
     if llm is None:
         llm = _build_llm()
@@ -484,10 +495,10 @@ def _generate_analysis(
 def _session_to_dict(session: Session) -> Dict[str, Any]:
     return {
         "session_id": session.session_id,
-        "version": session.version,
+        "version": float(session.version),
         "title": session.title,
         "text": session.text_chunks,
         "summary": session.summary,
-        "inserted_at": session.inserted_at,
-        "updated_at": session.updated_at,
+        "inserted_at": float(session.inserted_at),
+        "updated_at": float(session.updated_at),
     }

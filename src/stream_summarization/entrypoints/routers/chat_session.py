@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
-from auto_summarization.entrypoints.schemas.session import (
+from stream_summarization.entrypoints.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
     DeleteSessionRequest,
@@ -19,12 +19,13 @@ from auto_summarization.entrypoints.schemas.session import (
     UpdateSessionTitleRequest,
     UpdateSessionTitleResponse,
 )
-from auto_summarization.services.config import authorization
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW, UserUoW
-from auto_summarization.services.handlers.session import (
+from stream_summarization.services.config import authorization
+from stream_summarization.services.data.unit_of_work import DocumentTemplateUoW, UserUoW
+from stream_summarization.services.handlers.session import (
     create_new_session,
     delete_exist_session,
     download_session_file,
+    get_session_details,
     get_session_list,
     search_similarity_sessions,
     update_session_summarization,
@@ -59,7 +60,7 @@ async def create(
             category_index=request.category,
             temporary=request.temporary,
             user_uow=UserUoW(),
-            analysis_uow=AnalysisTemplateUoW(),
+            document_uow=DocumentTemplateUoW(),
         )
         return CreateSessionResponse(session_id=session_id, summary=summary, error=error)
     except ValueError as error:
@@ -81,7 +82,7 @@ async def update_summarization(
             category_index=request.category,
             version=request.version,
             user_uow=UserUoW(),
-            analysis_uow=AnalysisTemplateUoW(),
+            document_uow=DocumentTemplateUoW(),
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
@@ -188,6 +189,21 @@ async def download_file(
         raise
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
+
+
+@router.get("/{session_id}", response_model=SessionInfo, status_code=200)
+async def fetch_session(
+    session_id: str,
+    auth: str = Header(default=None, alias=authorization),
+) -> SessionInfo:
+    """Retrieve a single chat session with the schema required by the public API."""
+    if auth is None:
+        raise HTTPException(status_code=400, detail="Authorization header is required")
+    try:
+        session = get_session_details(user_id=auth, session_id=session_id, uow=UserUoW())
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    return SessionInfo(**session)
 
 
 @router.delete("/delete", response_model=DeleteSessionResponse, status_code=200)

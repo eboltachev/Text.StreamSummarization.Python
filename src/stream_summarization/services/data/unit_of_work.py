@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import abc
 
-from auto_summarization.adapters.repository import AnalysisTemplateRepository, SessionRepository, UserRepository
-from auto_summarization.services.config import register_analysis_templates, session_factory
+from stream_summarization.adapters.repository import DocumentTemplateRepository, SessionRepository, UserRepository
+from stream_summarization.services.config import register_document_templates, session_factory
 
 
 class IUoW(abc.ABC):
@@ -30,7 +30,7 @@ class UserUoW(IUoW):
         self.db = self.session_factory()
         self.users = UserRepository(self.db)
         self.sessions = SessionRepository(self.db)
-        self.templates = AnalysisTemplateRepository(self.db)
+        self.templates = DocumentTemplateRepository(self.db)
         return super().__enter__()
 
     def __exit__(self, *args):
@@ -44,11 +44,11 @@ class UserUoW(IUoW):
         self.db.rollback()
 
 
-class AnalysisTemplateUoW(IUoW):
-    def __enter__(self) -> AnalysisTemplateUoW:
-        register_analysis_templates()
+class DocumentTemplateUoW(IUoW):
+    def __enter__(self) -> DocumentTemplateUoW:
+        register_document_templates()
         self.db = self.session_factory()
-        self.templates = AnalysisTemplateRepository(self.db)
+        self.templates = DocumentTemplateRepository(self.db)
         return super().__enter__()
 
     def __exit__(self, *args):

@@ -1,11 +1,14 @@
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from auto_summarization.entrypoints.schemas.analysis import AnalyzeTypesResponse, LoadDocumentResponse
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW
-from auto_summarization.services.handlers.analysis import extract_text, get_analyze_types
+from stream_summarization.entrypoints.schemas.documents import (
+    LoadDocumentResponse,
+    ReportTypesResponse,
+)
+from stream_summarization.services.data.unit_of_work import DocumentTemplateUoW
+from stream_summarization.services.handlers.documents import extract_text, get_report_types
 
 router = APIRouter()
 
@@ -32,7 +35,7 @@ async def load_document(
     return LoadDocumentResponse(contents=contents)
 
 
-@router.get("/analyze_types", response_model=AnalyzeTypesResponse, status_code=200)
-async def analyze_types() -> AnalyzeTypesResponse:
-    report_types = get_analyze_types(AnalysisTemplateUoW())
-    return AnalyzeTypesResponse(report_types=report_types)
+@router.get("/report_types", response_model=ReportTypesResponse, status_code=200)
+async def report_types() -> ReportTypesResponse:
+    report_types = get_report_types(DocumentTemplateUoW())
+    return ReportTypesResponse(report_types=report_types)

@@ -20,6 +20,6 @@ COPY ./src/ ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
-ENTRYPOINT uv run uvicorn auto_summarization.entrypoints.api:app \
-           --host ${AUTO_SUMMARIZATION_API_HOST} \
-           --port ${AUTO_SUMMARIZATION_API_PORT}
+ENTRYPOINT uv run uvicorn stream_summarization.entrypoints.api:app \
+           --host ${STREAM_SUMMARIZATION_API_HOST} \
+           --port ${STREAM_SUMMARIZATION_API_PORT}

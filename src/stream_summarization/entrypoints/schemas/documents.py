@@ -7,9 +7,9 @@ from pydantic import BaseModel
 
 class LoadDocumentResponse(BaseModel):
     contents: List[str]
-class AnalyzeTypesResponse(BaseModel):
+class ReportTypesResponse(BaseModel):
     report_types: List[str]
 
 
-class AnalyzeErrorResponse(BaseModel):
+class DocumentErrorResponse(BaseModel):
     detail: str
