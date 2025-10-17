@@ -1,7 +1,7 @@
-from auto_summarization.domain.analysis import AnalysisTemplate
-from auto_summarization.domain.session import Session
-from auto_summarization.domain.user import User
-from auto_summarization.services.config import Session as DB
+from stream_summarization.domain.documents import DocumentTemplate
+from stream_summarization.domain.session import Session
+from stream_summarization.domain.user import User
+from stream_summarization.services.config import Session as DB
 
 from .base import IRepository
 
@@ -39,22 +39,22 @@ class SessionRepository(IRepository):
         return self.db.query(Session).filter_by(user_id=user_id).all()
 
 
-class AnalysisTemplateRepository(IRepository):
+class DocumentTemplateRepository(IRepository):
     def __init__(self, db: DB):
         self.db = db
 
-    def add(self, data: AnalysisTemplate) -> None:
+    def add(self, data: DocumentTemplate) -> None:
         self.db.add(data)
 
     def get(self, object_id: str):
-        return self.db.query(AnalysisTemplate).filter_by(template_id=object_id).first()
+        return self.db.query(DocumentTemplate).filter_by(template_id=object_id).first()
 
     def list(self):
-        return self.db.query(AnalysisTemplate).all()
+        return self.db.query(DocumentTemplate).all()
 
     def list_by_category(self, category_index: int):
         return (
-            self.db.query(AnalysisTemplate)
+            self.db.query(DocumentTemplate)
             .filter_by(category_index=category_index)
             .all()
         )

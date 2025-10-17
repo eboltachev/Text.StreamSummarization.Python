@@ -5,8 +5,8 @@ import sys
 from time import time
 from typing import Any, Dict, List
 
-from auto_summarization.domain.user import User
-from auto_summarization.services.data.unit_of_work import IUoW
+from stream_summarization.domain.user import User
+from stream_summarization.services.data.unit_of_work import IUoW
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
