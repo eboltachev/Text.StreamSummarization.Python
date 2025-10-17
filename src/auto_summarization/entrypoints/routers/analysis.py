@@ -34,5 +34,5 @@ async def load_document(
 
 @router.get("/analyze_types", response_model=AnalyzeTypesResponse, status_code=200)
 async def analyze_types() -> AnalyzeTypesResponse:
-    categories = get_analyze_types(AnalysisTemplateUoW())
-    return AnalyzeTypesResponse(categories=categories)
+    report_types = get_analyze_types(AnalysisTemplateUoW())
+    return AnalyzeTypesResponse(report_types=report_types)

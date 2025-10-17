@@ -80,7 +80,7 @@ def extract_text(content: bytes, extension: str) -> str:
     raise ValueError("Unsupported document format")
 
 
-def _load_categories_from_file() -> List[str]:
+def _load_report_types_from_file() -> List[str]:
     path = Path(settings.AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH)
     if not path.exists():
         return []
@@ -93,7 +93,7 @@ def _load_categories_from_file() -> List[str]:
     if not isinstance(payload, dict):
         return []
 
-    categories: List[str] = []
+    report_types: List[str] = []
     for item in payload.get("types", []):
         if not isinstance(item, dict):
             continue
@@ -101,8 +101,8 @@ def _load_categories_from_file() -> List[str]:
         prompt = str(item.get("prompt", "")).strip()
         if not category or not prompt:
             continue
-        categories.append(category)
-    return categories
+        report_types.append(category)
+    return report_types
 
 
 def get_analyze_types(
@@ -116,5 +116,5 @@ def get_analyze_types(
         for template in templates:
             category_map.setdefault(template.category_index, template.category)
 
-    categories = _load_categories_from_file() or list(category_map.values())
-    return categories
+    report_types = _load_report_types_from_file() or list(category_map.values())
+    return report_types
