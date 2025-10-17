@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
-from auto_summarization.entrypoints.schemas.session import (
+from stream_summarization.entrypoints.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
     DeleteSessionRequest,
@@ -19,9 +19,9 @@ from auto_summarization.entrypoints.schemas.session import (
     UpdateSessionTitleRequest,
     UpdateSessionTitleResponse,
 )
-from auto_summarization.services.config import authorization
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW, UserUoW
-from auto_summarization.services.handlers.session import (
+from stream_summarization.services.config import authorization
+from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW, UserUoW
+from stream_summarization.services.handlers.session import (
     create_new_session,
     delete_exist_session,
     download_session_file,

@@ -9,13 +9,13 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import List
 
-from auto_summarization.services.config import settings
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW
+from stream_summarization.services.config import settings
+from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW
 
 
 def extract_text(content: bytes, extension: str) -> str:
     ext = extension.lower().lstrip(".")
-    if ext not in settings.AUTO_SUMMARIZATION_SUPPORTED_FORMATS:
+    if ext not in settings.STREAM_SUMMARIZATION_SUPPORTED_FORMATS:
         raise ValueError("Unsupported document format")
 
     if ext == "txt":
@@ -81,7 +81,7 @@ def extract_text(content: bytes, extension: str) -> str:
 
 
 def _load_categories_from_file() -> List[str]:
-    path = Path(settings.AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH)
+    path = Path(settings.STREAM_SUMMARIZATION_ANALYZE_TYPES_PATH)
     if not path.exists():
         return []
 

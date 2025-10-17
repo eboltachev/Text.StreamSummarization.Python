@@ -1,4 +1,4 @@
-from auto_summarization.entrypoints.schemas.user import (
+from stream_summarization.entrypoints.schemas.user import (
     CreateUserRequest,
     CreateUserResponse,
     DeleteUserRequest,
@@ -7,8 +7,8 @@ from auto_summarization.entrypoints.schemas.user import (
     UsersResponse,
 )
 from fastapi import APIRouter, HTTPException
-from auto_summarization.services.data.unit_of_work import UserUoW
-from auto_summarization.services.handlers.user import create_new_user, delete_exist_user, get_user_list
+from stream_summarization.services.data.unit_of_work import UserUoW
+from stream_summarization.services.handlers.user import create_new_user, delete_exist_user, get_user_list
 
 router = APIRouter()
 

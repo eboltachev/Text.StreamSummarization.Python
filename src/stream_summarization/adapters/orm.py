@@ -1,9 +1,9 @@
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, MetaData, String, Table, Text
 from sqlalchemy.orm import registry, relationship
 
-from auto_summarization.domain.analysis import AnalysisTemplate
-from auto_summarization.domain.session import Session
-from auto_summarization.domain.user import User
+from stream_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.domain.session import Session
+from stream_summarization.domain.user import User
 
 metadata = MetaData()
 mapper_registry = registry()

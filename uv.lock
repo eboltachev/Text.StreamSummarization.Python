@@ -30,7 +30,7 @@ wheels = [
 ]
 
 [[package]]
-name = "auto-summarization"
+name = "stream-summarization"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
