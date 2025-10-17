@@ -8,7 +8,7 @@ from .base import IDomain
 
 
 @dataclass
-class AnalysisTemplate(IDomain):
+class DocumentTemplate(IDomain):
     template_id: str
     category_index: int
     category: str

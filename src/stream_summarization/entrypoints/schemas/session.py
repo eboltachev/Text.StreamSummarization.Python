@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from auto_summarization.domain.enums import StatusType
+from stream_summarization.domain.enums import StatusType
 
 
 class SessionSearchResult(BaseModel):
@@ -20,7 +20,7 @@ class SearchSessionsResponse(BaseModel):
 
 class SessionInfo(BaseModel):
     session_id: str
-    version: int
+    version: float
     title: str
     text: List[str]
     summary: str
