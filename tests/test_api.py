@@ -93,7 +93,7 @@ config_stub = types.ModuleType("stream_summarization.services.config")
 config_stub.settings = types.SimpleNamespace(
     STREAM_SUMMARIZATION_SUPPORTED_FORMATS=("txt", "doc", "docx", "pdf", "odt"),
     STREAM_SUMMARIZATION_MAX_SESSIONS=100,
-    STREAM_SUMMARIZATION_ANALYZE_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "analyze_types.json"),
+    STREAM_SUMMARIZATION_ANALYZE_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "report_types.json"),
     OPENAI_MODEL_NAME="test-model",
     STREAM_SUMMARIZATION_CONNECTION_TIMEOUT=60,
     OPENAI_API_KEY="test-key",
@@ -139,7 +139,7 @@ from stream_summarization.domain.user import User
 from stream_summarization.services.handlers import analysis as analysis_handler
 from stream_summarization.services.handlers import session as session_handler
 
-ANALYZE_PATH = Path(__file__).resolve().parents[1] / "analyze_types.json"
+ANALYZE_PATH = Path(__file__).resolve().parents[1] / "report_types.json"
 
 
 def _load_templates() -> List[AnalysisTemplate]:

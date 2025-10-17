@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from stream_summarization.entrypoints.routers import analysis, session, user
+from stream_summarization.entrypoints.routers import report, session, user
 from stream_summarization.services import config
 
 
@@ -26,4 +26,4 @@ app = API()
 prefix = config.settings.STREAM_SUMMARIZATION_URL_PREFIX
 app.include_router(user.router, prefix=f"{prefix}/user", tags=["users"])
 app.include_router(session.router, prefix=f"{prefix}/chat_session", tags=["sessions"])
-app.include_router(analysis.router, prefix=f"{prefix}/analysis", tags=["analysis"])
+app.include_router(report.router, prefix=f"{prefix}/reports", tags=["reports"])

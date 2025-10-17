@@ -1,19 +1,19 @@
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, MetaData, String, Table, Text
 from sqlalchemy.orm import registry, relationship
 
-from stream_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.domain.report import ReportTemplate
 from stream_summarization.domain.session import Session
 from stream_summarization.domain.user import User
 
 metadata = MetaData()
 mapper_registry = registry()
 
-analysis_templates = Table(
-    "analysis_templates",
+report_templates = Table(
+    "report_templates",
     metadata,
     Column("template_id", String, primary_key=True, autoincrement=False),
-    Column("category_index", Integer, nullable=False),
-    Column("category", String, nullable=False),
+    Column("report_index", Integer, nullable=False),
+    Column("report_type", String, nullable=False),
     Column("prompt", Text, nullable=False),
 )
 
@@ -41,7 +41,7 @@ sessions = Table(
 
 
 def start_mappers():
-    mapper_registry.map_imperatively(AnalysisTemplate, analysis_templates)
+    mapper_registry.map_imperatively(ReportTemplate, report_templates)
     mapper_registry.map_imperatively(
         User,
         users,

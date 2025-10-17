@@ -20,7 +20,7 @@ from stream_summarization.entrypoints.schemas.session import (
     UpdateSessionTitleResponse,
 )
 from stream_summarization.services.config import authorization
-from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW, UserUoW
+from stream_summarization.services.data.unit_of_work import ReportTemplateUoW, UserUoW
 from stream_summarization.services.handlers.session import (
     create_new_session,
     delete_exist_session,
@@ -56,10 +56,10 @@ async def create(
         session_id, summary, error = create_new_session(
             user_id=auth,
             text=request.text,
-            category_index=request.category,
+            report_index=request.report_index,
             temporary=request.temporary,
             user_uow=UserUoW(),
-            analysis_uow=AnalysisTemplateUoW(),
+            report_uow=ReportTemplateUoW(),
         )
         return CreateSessionResponse(session_id=session_id, summary=summary, error=error)
     except ValueError as error:
@@ -78,10 +78,10 @@ async def update_summarization(
             user_id=auth,
             session_id=request.session_id,
             text=request.text,
-            category_index=request.category,
+            report_index=request.report_index,
             version=request.version,
             user_uow=UserUoW(),
-            analysis_uow=AnalysisTemplateUoW(),
+            report_uow=ReportTemplateUoW(),
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))

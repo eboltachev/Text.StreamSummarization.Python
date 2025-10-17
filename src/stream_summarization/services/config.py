@@ -8,7 +8,7 @@ from typing import List, Tuple
 from uuid import uuid4
 
 from stream_summarization.adapters.orm import metadata, start_mappers
-from stream_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.domain.report import ReportTemplate
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings.sources import (
@@ -96,8 +96,8 @@ class Settings(BaseSettings):
     )
     STREAM_SUMMARIZATION_MAX_SESSIONS: int = Field(default=100, description="Max sessions per user")
     STREAM_SUMMARIZATION_URL_PREFIX: str = Field(default="/v1", description="API URL prefix")
-    STREAM_SUMMARIZATION_ANALYZE_TYPES_PATH: str = Field(
-        default="/app/analyze_types.json", description="Path to analyze types configuration"
+    STREAM_SUMMARIZATION_REPORT_TYPES_PATH: str = Field(
+        default="/app/report_types.json", description="Path to report types configuration"
     )
     STREAM_SUMMARIZATION_CONNECTION_TIMEOUT: int = Field(
         default=60, description="Timeout for knowledge base model requests"
@@ -114,7 +114,7 @@ class Settings(BaseSettings):
         default="http://localhost:8000/v1", description="OpenAI compatible endpoint"
     )
     OPENAI_API_KEY: str | None = Field(default=None, description="API key for universal model")
-    OPENAI_MODEL_NAME: str = Field(default="Qwen/Qwen3-4B-AWQ", description="Model name for universal analysis")
+    OPENAI_MODEL_NAME: str = Field(default="Qwen/Qwen3-4B-AWQ", description="Model name for universal model")
     DEBUG: int = Field(default=0, description="Debug mode flag")
 
     class Config:
@@ -171,8 +171,8 @@ start_mappers()
 session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def register_analysis_templates(session: Session = session_factory()):
-    path = Path(settings.STREAM_SUMMARIZATION_ANALYZE_TYPES_PATH)
+def register_report_templates(session: Session = session_factory()):
+    path = Path(settings.STREAM_SUMMARIZATION_REPORT_TYPES_PATH)
     if not path.exists():
         session.close()
         return
@@ -181,27 +181,27 @@ def register_analysis_templates(session: Session = session_factory()):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except JSONDecodeError as exc:
-            logger.error("Failed to parse analyze types configuration: %s", exc)
+            logger.error("Failed to parse report types configuration: %s", exc)
             return
 
-        session.query(AnalysisTemplate).delete()
+        session.query(ReportTemplate).delete()
         session.commit()
 
         types = payload.get("types", []) if isinstance(payload, dict) else []
-        for index, item in enumerate(types):
-            category = str(item.get("category", "")).strip()
+        for report_index, item in enumerate(types):
+            report_type = str(item.get("category", "")).strip()
             prompt = str(item.get("prompt", "")).strip()
-            if not category or not prompt:
+            if not report_type or not prompt:
                 logger.warning(
-                    "Skipping analyze template at index %s due to missing category or prompt",
-                    index,
+                    "Skipping report template at index %s due to missing category or prompt",
+                    report_index,
                 )
                 continue
 
-            template = AnalysisTemplate(
+            template = ReportTemplate(
                 template_id=str(uuid4()),
-                category_index=index,
-                category=category,
+                report_index=report_index,
+                report_type=report_type,
                 prompt=prompt,
             )
             session.add(template)
@@ -210,4 +210,4 @@ def register_analysis_templates(session: Session = session_factory()):
         session.close()
 
 
-register_analysis_templates()
+register_report_templates()

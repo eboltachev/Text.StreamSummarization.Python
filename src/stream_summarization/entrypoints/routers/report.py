@@ -3,9 +3,9 @@ from typing import List
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from stream_summarization.entrypoints.schemas.analysis import AnalyzeTypesResponse, LoadDocumentResponse
-from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW
-from stream_summarization.services.handlers.analysis import extract_text, get_analyze_types
+from stream_summarization.entrypoints.schemas.report import ReportTypesResponse, LoadDocumentResponse
+from stream_summarization.services.data.unit_of_work import ReportTemplateUoW
+from stream_summarization.services.handlers.report import extract_text, get_report_types
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ async def load_document(
     return LoadDocumentResponse(contents=contents)
 
 
-@router.get("/analyze_types", response_model=AnalyzeTypesResponse, status_code=200)
-async def analyze_types() -> AnalyzeTypesResponse:
-    categories = get_analyze_types(AnalysisTemplateUoW())
-    return AnalyzeTypesResponse(categories=categories)
+@router.get("/report_types", response_model=ReportTypesResponse, status_code=200)
+async def report_types() -> ReportTypesResponse:
+    types = get_report_types(ReportTemplateUoW())
+    return ReportTypesResponse(report_types=types)

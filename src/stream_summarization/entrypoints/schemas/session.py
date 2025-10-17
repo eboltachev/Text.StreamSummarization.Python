@@ -34,7 +34,7 @@ class FetchSessionResponse(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     text: List[str]
-    category: int
+    report_index: int
     temporary: Optional[bool] = False
 
 
@@ -47,7 +47,7 @@ class CreateSessionResponse(BaseModel):
 class UpdateSessionSummarizationRequest(BaseModel):
     session_id: str
     text: List[str]
-    category: int
+    report_index: int
     version: int
 
 

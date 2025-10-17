@@ -18,7 +18,7 @@ class Enum(enum.Enum, metaclass=EnumMeta):
     pass
 
 
-class AnalysisModelType(Enum):
+class ReportModelType(Enum):
     UNIVERSAL = "UNIVERSAL"
     PRETRAINED = "PRETRAINED"
 

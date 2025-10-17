@@ -18,7 +18,7 @@ from stream_summarization.domain.enums import StatusType
 from stream_summarization.domain.session import Session
 from stream_summarization.domain.user import User
 from stream_summarization.services.config import settings
-from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW, IUoW
+from stream_summarization.services.data.unit_of_work import ReportTemplateUoW, IUoW
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,18 +45,18 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
 def create_new_session(
     user_id: str,
     text: Sequence[str],
-    category_index: int,
+    report_index: int,
     temporary: bool,
     user_uow: IUoW,
-    analysis_uow: AnalysisTemplateUoW,
+    report_uow: ReportTemplateUoW,
 ) -> Tuple[str, str, str | None]:
     logger.info("start create_new_session")
     cleaned_text = _prepare_text_chunks(text)
     now = time()
-    summary = _generate_analysis(
+    summary = _generate_report_types(
         text=cleaned_text,
-        category_index=category_index,
-        analysis_uow=analysis_uow,
+        report_index=report_index,
+        report_uow=report_uow,
     )
 
     title_source = summary.strip() or cleaned_text[0]
@@ -93,10 +93,10 @@ def update_session_summarization(
     user_id: str,
     session_id: str,
     text: Sequence[str],
-    category_index: int,
+    report_index: int,
     version: int,
     user_uow: IUoW,
-    analysis_uow: AnalysisTemplateUoW,
+    report_uow: ReportTemplateUoW,
 ) -> Tuple[str, str | None]:
     logger.info("start update_session_summarization")
     with user_uow:
@@ -112,10 +112,10 @@ def update_session_summarization(
 
         cleaned_text = _prepare_text_chunks(text)
 
-        summary = _generate_analysis(
+        summary = _generate_report_types(
             text=cleaned_text,
-            category_index=category_index,
-            analysis_uow=analysis_uow,
+            report_index=report_index,
+            report_uow=report_uow,
         )
         session.update_text(cleaned_text)
         session.summary = summary
@@ -415,13 +415,13 @@ def _normalize_label(output: str, candidates: List[str]) -> str:
 
 
 def _load_prompt(
-    category_index: int,
-    analysis_uow: AnalysisTemplateUoW,
+    report_index: int,
+    report_uow: ReportTemplateUoW,
 ) -> str:
-    with analysis_uow:
-        templates = analysis_uow.templates.list_by_category(category_index)
+    with report_uow:
+        templates = report_uow.templates.list_by_report_types(report_index)
         if not templates:
-            raise ValueError("Prompt template not found for the given category")
+            raise ValueError("Prompt template not found for the given report types")
 
         template = min(templates, key=lambda item: item.template_id)
         prompt = template.prompt
@@ -465,12 +465,12 @@ def _prepare_text_chunks(chunks: Iterable[str]) -> List[str]:
     return cleaned
 
 
-def _generate_analysis(
+def _generate_report_types(
     text: Sequence[str],
-    category_index: int,
-    analysis_uow: AnalysisTemplateUoW,
+    report_index: int,
+    report_uow: ReportTemplateUoW,
 ) -> str:
-    prompt = _load_prompt(category_index, analysis_uow)
+    prompt = _load_prompt(report_index, report_uow)
     llm: ChatOpenAI | None = None
     if llm is None:
         llm = _build_llm()

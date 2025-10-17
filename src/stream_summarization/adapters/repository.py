@@ -1,4 +1,4 @@
-from stream_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.domain.report import ReportTemplate
 from stream_summarization.domain.session import Session
 from stream_summarization.domain.user import User
 from stream_summarization.services.config import Session as DB
@@ -39,22 +39,22 @@ class SessionRepository(IRepository):
         return self.db.query(Session).filter_by(user_id=user_id).all()
 
 
-class AnalysisTemplateRepository(IRepository):
+class ReportTemplateRepository(IRepository):
     def __init__(self, db: DB):
         self.db = db
 
-    def add(self, data: AnalysisTemplate) -> None:
+    def add(self, data: ReportTemplate) -> None:
         self.db.add(data)
 
     def get(self, object_id: str):
-        return self.db.query(AnalysisTemplate).filter_by(template_id=object_id).first()
+        return self.db.query(ReportTemplate).filter_by(template_id=object_id).first()
 
     def list(self):
-        return self.db.query(AnalysisTemplate).all()
+        return self.db.query(ReportTemplate).all()
 
-    def list_by_category(self, category_index: int):
+    def list_by_report_types(self, report_index: int):
         return (
-            self.db.query(AnalysisTemplate)
-            .filter_by(category_index=category_index)
+            self.db.query(ReportTemplate)
+            .filter_by(report_index=report_index)
             .all()
         )
