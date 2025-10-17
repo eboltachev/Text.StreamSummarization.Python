@@ -1,7 +1,7 @@
-from auto_summarization.domain.analysis import AnalysisTemplate
-from auto_summarization.domain.session import Session
-from auto_summarization.domain.user import User
-from auto_summarization.services.config import Session as DB
+from stream_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.domain.session import Session
+from stream_summarization.domain.user import User
+from stream_summarization.services.config import Session as DB
 
 from .base import IRepository
 

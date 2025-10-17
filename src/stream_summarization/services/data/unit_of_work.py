@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import abc
 
-from auto_summarization.adapters.repository import AnalysisTemplateRepository, SessionRepository, UserRepository
-from auto_summarization.services.config import register_analysis_templates, session_factory
+from stream_summarization.adapters.repository import AnalysisTemplateRepository, SessionRepository, UserRepository
+from stream_summarization.services.config import register_analysis_templates, session_factory
 
 
 class IUoW(abc.ABC):

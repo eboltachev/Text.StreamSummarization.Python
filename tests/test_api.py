@@ -89,22 +89,22 @@ def _install_sqlalchemy_stub() -> None:
 
 _install_sqlalchemy_stub()
 
-config_stub = types.ModuleType("auto_summarization.services.config")
+config_stub = types.ModuleType("stream_summarization.services.config")
 config_stub.settings = types.SimpleNamespace(
-    AUTO_SUMMARIZATION_SUPPORTED_FORMATS=("txt", "doc", "docx", "pdf", "odt"),
-    AUTO_SUMMARIZATION_MAX_SESSIONS=100,
-    AUTO_SUMMARIZATION_ANALYZE_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "analyze_types.json"),
+    STREAM_SUMMARIZATION_SUPPORTED_FORMATS=("txt", "doc", "docx", "pdf", "odt"),
+    STREAM_SUMMARIZATION_MAX_SESSIONS=100,
+    STREAM_SUMMARIZATION_ANALYZE_TYPES_PATH=str(Path(__file__).resolve().parents[1] / "analyze_types.json"),
     OPENAI_MODEL_NAME="test-model",
-    AUTO_SUMMARIZATION_CONNECTION_TIMEOUT=60,
+    STREAM_SUMMARIZATION_CONNECTION_TIMEOUT=60,
     OPENAI_API_KEY="test-key",
 )
 config_stub.authorization = "Authorization"
 config_stub.Session = sys.modules["sqlalchemy"].FakeSession
 config_stub.session_factory = lambda *args, **kwargs: sys.modules["sqlalchemy"].FakeSession()
 config_stub.register_analysis_templates = lambda *args, **kwargs: None
-sys.modules["auto_summarization.services.config"] = config_stub
-if "auto_summarization.services" in sys.modules:
-    setattr(sys.modules["auto_summarization.services"], "config", config_stub)
+sys.modules["stream_summarization.services.config"] = config_stub
+if "stream_summarization.services" in sys.modules:
+    setattr(sys.modules["stream_summarization.services"], "config", config_stub)
 
 httpx_stub = types.ModuleType("httpx")
 
@@ -134,10 +134,10 @@ class _FakeClient:
 httpx_stub.Client = _FakeClient
 sys.modules["httpx"] = httpx_stub
 
-from auto_summarization.domain.analysis import AnalysisTemplate
-from auto_summarization.domain.user import User
-from auto_summarization.services.handlers import analysis as analysis_handler
-from auto_summarization.services.handlers import session as session_handler
+from stream_summarization.domain.analysis import AnalysisTemplate
+from stream_summarization.domain.user import User
+from stream_summarization.services.handlers import analysis as analysis_handler
+from stream_summarization.services.handlers import session as session_handler
 
 ANALYZE_PATH = Path(__file__).resolve().parents[1] / "analyze_types.json"
 

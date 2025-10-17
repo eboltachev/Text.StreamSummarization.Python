@@ -14,11 +14,11 @@ from uuid import uuid4
 
 import httpx
 
-from auto_summarization.domain.enums import StatusType
-from auto_summarization.domain.session import Session
-from auto_summarization.domain.user import User
-from auto_summarization.services.config import settings
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW, IUoW
+from stream_summarization.domain.enums import StatusType
+from stream_summarization.domain.session import Session
+from stream_summarization.domain.user import User
+from stream_summarization.services.config import settings
+from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW, IUoW
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
         user = uow.users.get(object_id=user_id)
         if not user:
             return []
-        for session in user.get_sessions()[: settings.AUTO_SUMMARIZATION_MAX_SESSIONS]:
+        for session in user.get_sessions()[: settings.STREAM_SUMMARIZATION_MAX_SESSIONS]:
             sessions.append(_session_to_dict(session))
     logger.info("finish get_session_list")
     return sessions
@@ -277,7 +277,7 @@ def _get_context_window(model_name: str) -> int:
     base_url = settings.OPENAI_API_HOST.rstrip("/")
     model_path = f"{base_url}/models/{model_name}"
     try:
-        with httpx.Client(timeout=settings.AUTO_SUMMARIZATION_CONNECTION_TIMEOUT) as client:
+        with httpx.Client(timeout=settings.STREAM_SUMMARIZATION_CONNECTION_TIMEOUT) as client:
             response = client.get(model_path)
             response.raise_for_status()
             payload = response.json()
@@ -444,7 +444,7 @@ def _build_llm() -> "ChatOpenAI":
         api_key=settings.OPENAI_API_KEY,
         model=settings.OPENAI_MODEL_NAME,
         temperature=0,
-        timeout=settings.AUTO_SUMMARIZATION_CONNECTION_TIMEOUT,
+        timeout=settings.STREAM_SUMMARIZATION_CONNECTION_TIMEOUT,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 

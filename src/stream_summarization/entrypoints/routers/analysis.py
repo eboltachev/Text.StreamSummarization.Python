@@ -3,9 +3,9 @@ from typing import List
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from auto_summarization.entrypoints.schemas.analysis import AnalyzeTypesResponse, LoadDocumentResponse
-from auto_summarization.services.data.unit_of_work import AnalysisTemplateUoW
-from auto_summarization.services.handlers.analysis import extract_text, get_analyze_types
+from stream_summarization.entrypoints.schemas.analysis import AnalyzeTypesResponse, LoadDocumentResponse
+from stream_summarization.services.data.unit_of_work import AnalysisTemplateUoW
+from stream_summarization.services.handlers.analysis import extract_text, get_analyze_types
 
 router = APIRouter()
 
