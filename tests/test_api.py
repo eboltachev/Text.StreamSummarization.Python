@@ -146,7 +146,7 @@ class TestAPI:
         # Добавили обязательный report_index + DocText
         create_payload = {
             "title": "Smoke test session",
-            "text": [{"text": "Hello from test suite"}],
+            "documents": [{"text": "Hello from test suite"}],
             "messages": [{"role": "user", "content": "Hello from test suite"}],  # игнорится сервисом
             "report_index": 0,
         }
@@ -171,7 +171,7 @@ class TestAPI:
         # update_summarization — добавляем готовый текст без LLM (DocText)
         upd_sum = {
             "session_id": session_id,
-            "text": [
+            "documents": [
                 {"text": "Это тестовый отчёт. Раздел 1: краткая выжимка.", "title": "R1"},
                 {"text": "Раздел 2: детали реализации и результаты.", "title": "R2"},
             ],
@@ -352,7 +352,7 @@ class TestAPI:
     async def test_sessions__update_summarization_user_not_found(self):
         payload = {
             "session_id": "11111111-1111-1111-1111-111111111111",
-            "text": [{"text": "a"}, {"text": "b"}],
+            "documents": [{"text": "a"}, {"text": "b"}],
             "report_index": 0,
             "version": 0,
         }
@@ -388,7 +388,7 @@ class TestAPI:
 
         create_payload = {
             "title": "Smoke test session",
-            "text": [{"text": "Hello from test suite"}],
+            "documents": [{"text": "Hello from test suite"}],
             "messages": [{"role": "user", "content": "Hello from test suite"}],
             "report_index": 5,
         }

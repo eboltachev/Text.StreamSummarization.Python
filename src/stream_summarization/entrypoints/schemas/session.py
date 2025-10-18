@@ -35,7 +35,7 @@ class SessionInfo(BaseModel):
     session_id: str
     version: int
     title: str
-    text: List[DocText]
+    documents: List[DocText]
     summary: str
     inserted_at: float
     updated_at: float
@@ -46,7 +46,7 @@ class FetchSessionResponse(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     title: str = ""
-    text: List[DocText]
+    documents: List[DocText]
     report_index: int
     temporary: Optional[bool] = False
 
@@ -59,7 +59,7 @@ class CreateSessionResponse(BaseModel):
 
 class UpdateSessionSummarizationRequest(BaseModel):
     session_id: str
-    text: List[DocText]
+    documents: List[DocText]
     report_index: int
     version: int
 

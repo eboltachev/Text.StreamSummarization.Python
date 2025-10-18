@@ -58,7 +58,7 @@ async def create(
         session_id, summary, error = create_new_session(
             user_id=auth,
             title=request.title,
-            text=request.text,
+            documents=request.documents,
             report_index=request.report_index,
             temporary=request.temporary,
             user_uow=UserUoW(),
@@ -80,7 +80,7 @@ async def update_summarization(
         summary, error = update_session_summarization(
             user_id=auth,
             session_id=request.session_id,
-            text=request.text,
+            documents=request.documents,
             report_index=request.report_index,
             version=request.version,
             user_uow=UserUoW(),

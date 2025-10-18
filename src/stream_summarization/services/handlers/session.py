@@ -45,14 +45,14 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
 def create_new_session(
     user_id: str,
     title: str,
-    text: Sequence[Any],
+    documents: Sequence[Any],
     report_index: int,
     temporary: bool,
     user_uow: IUoW,
     report_uow: ReportTemplateUoW,
 ) -> Tuple[str, str, str | None]:
     logger.info("start create_new_session")
-    docs = _prepare_doc_texts(text)
+    docs = _prepare_doc_texts(documents)
     cleaned_text = [d["text"] for d in docs]
     now = time()
     summary = _generate_report_types(
@@ -94,7 +94,7 @@ def create_new_session(
 def update_session_summarization(
     user_id: str,
     session_id: str,
-    text: Sequence[Any],
+    documents: Sequence[Any],
     report_index: int,
     version: int,
     user_uow: IUoW,
@@ -112,7 +112,7 @@ def update_session_summarization(
             raise ValueError("Version mismatch")
         now = time()
 
-        docs = _prepare_doc_texts(text)
+        docs = _prepare_doc_texts(documents)
         cleaned_text = [d["text"] for d in docs]
 
         summary = _generate_report_types(
@@ -516,13 +516,13 @@ def _session_to_dict(session: Session, short: bool = False) -> Dict[str, Any]:
         "session_id": session.session_id,
         "version": session.version,
         "title": session.title,
-        "text": session.doc_texts,
+        "documents": session.doc_texts,
         "summary": session.summary,
         "inserted_at": session.inserted_at,
         "updated_at": session.updated_at,
     }
     if short:
-        payload.pop("text", None)
+        payload.pop("documents", None)
         payload.pop("summary", None)
     return payload
 
