@@ -423,3 +423,84 @@ class TestAPI:
             )
         else:
             assert "not found" in text or "user not found" in text or "error" in text
+
+    def _limits(self):
+        max_docs = int(os.environ.get("STREAM_SUMMARIZATION_MAX_DOCUMENTS", 1000))
+        max_chars = int(os.environ.get("STREAM_SUMMARIZATION_MAX_CHARS", 100000))
+        return {"max_docs": max_docs, "max_chars": max_chars}
+
+    def _post_create(self, headers, documents):
+        payload = {
+            "title": "Limit checks",
+            "documents": documents,
+            "report_index": 0,
+        }
+        return requests.post(
+            f"{self._api_url}{self._prefix}/chat_session/create",
+            json=payload,
+            headers=headers,
+        )
+
+    # ============================
+    # POSITIVE: граничные значения в пределах лимитов
+    # ============================
+    async def test_sessions__create_ok_limit_edges(self):
+        """
+        Позитив: документ ровно лимит по длине (max_chars), количество документов = 1.
+        """
+        user_id = self._users[0]["user_id"]
+        self._ensure_user(user_id, temporary=False)
+        h = self._auth_headers(user_id)
+
+        limits = self._limits()
+        doc = {"text": "a" * limits["max_chars"], "title": "edge", "url": "", "date": "", "source": ""}
+        resp = self._post_create(h, [doc])
+        assert resp.status_code in (200, 201, 202), resp.text
+
+    # ============================
+    # NEGATIVE: превышение количества документов
+    # ============================
+    async def test_sessions__create_too_many_documents(self):
+        """
+        Негатив: превышаем STREAM_SUMMARIZATION_MAX_DOCUMENTS.
+        Ожидаем 400 и сообщение вида:
+        {"detail": "Превышен лимит документов: <N> > <MAX>"}
+        """
+        user_id = self._users[0]["user_id"]
+        self._ensure_user(user_id, temporary=False)
+        h = self._auth_headers(user_id)
+
+        limits = self._limits()
+        over = limits["max_docs"] + 5
+        documents = [{"text": "x"} for _ in range(over)]
+
+        resp = self._post_create(h, documents)
+        assert resp.status_code == 400, resp.text
+        data = resp.json()
+        assert "detail" in data, resp.text
+        # Точное совпадение шаблона сообщения
+        expected = f"Превышен лимит документов: {over} > {limits['max_docs']}"
+        assert data["detail"] == expected, data["detail"]
+
+    # ============================
+    # NEGATIVE: превышение длины одного документа
+    # ============================
+    async def test_sessions__create_too_long_document(self):
+        """
+        Негатив: текст длиной (max_chars + 1).
+        Ожидаем 400 и сообщение вида:
+        {"detail": "Длина одного документа превышает лимит <MAX> символов"}
+        """
+        user_id = self._users[1]["user_id"]
+        self._ensure_user(user_id, temporary=False)
+        h = self._auth_headers(user_id)
+
+        limits = self._limits()
+        long_doc = {"text": "a" * (limits["max_chars"] + 1)}
+
+        resp = self._post_create(h, [long_doc])
+        assert resp.status_code == 400, resp.text
+        data = resp.json()
+        assert "detail" in data, resp.text
+        expected = f"Длина одного документа превышает лимит {limits['max_chars']} символов"
+        assert data["detail"] == expected, data["detail"]

@@ -466,8 +466,15 @@ def _prepare_doc_texts(chunks: Iterable[Any]) -> List[Dict[str, str]]:
     if isinstance(chunks, (str, bytes)) or not isinstance(chunks, Iterable):
         raise ValueError("Текст должен быть передан списком DocText/объектов")
 
+    # Лимит на количество документов
+    max_docs = settings.STREAM_SUMMARIZATION_MAX_DOCUMENTS
+    items = list(chunks)
+    if len(items) > max_docs:
+        raise ValueError(f"Превышен лимит документов: {len(items)} > {max_docs}")
+
     docs: List[Dict[str, str]] = []
-    for item in chunks:
+    max_chars = settings.STREAM_SUMMARIZATION_MAX_CHARS
+    for item in items:
         # Поддержка Pydantic v2 (model_dump) и v1 (dict)
         if hasattr(item, "model_dump"):
             item = item.model_dump()  # type: ignore[attr-defined]
@@ -478,6 +485,8 @@ def _prepare_doc_texts(chunks: Iterable[Any]) -> List[Dict[str, str]]:
             txt = str(item.get("text", "")).strip()
             if not txt:
                 continue
+            if len(txt) > max_chars:
+                raise ValueError(f"Длина одного документа превышает лимит {max_chars} символов")
             docs.append({
                 "text": txt,
                 "title": str(item.get("title", "")).strip(),
@@ -488,6 +497,8 @@ def _prepare_doc_texts(chunks: Iterable[Any]) -> List[Dict[str, str]]:
         else:
             s = str(item).strip()
             if s:
+                if len(s) > max_chars:
+                    raise ValueError(f"Длина одного документа превышает лимит {max_chars} символов")
                 docs.append({"text": s, "title": "", "url": "", "date": "", "source": ""})
 
     if not docs:

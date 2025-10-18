@@ -95,6 +95,8 @@ class Settings(BaseSettings):
         default=("txt", "doc", "docx", "pdf", "odt"), description="Allowed document formats"
     )
     STREAM_SUMMARIZATION_MAX_SESSIONS: int = Field(default=100, description="Max sessions per user")
+    STREAM_SUMMARIZATION_MAX_DOCUMENTS: int = Field(default=1000, description="Max documents per request")
+    STREAM_SUMMARIZATION_MAX_CHARS: int = Field(default=100000, description="Max characters per document")
     STREAM_SUMMARIZATION_URL_PREFIX: str = Field(default="/v1", description="API URL prefix")
     STREAM_SUMMARIZATION_REPORT_TYPES_PATH: str = Field(
         default="/app/report_types.json", description="Path to report types configuration"
