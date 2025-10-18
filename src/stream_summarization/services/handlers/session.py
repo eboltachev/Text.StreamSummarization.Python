@@ -45,14 +45,15 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
 def create_new_session(
     user_id: str,
     title: str,
-    text: Sequence[str],
+    text: Sequence[Any],
     report_index: int,
     temporary: bool,
     user_uow: IUoW,
     report_uow: ReportTemplateUoW,
 ) -> Tuple[str, str, str | None]:
     logger.info("start create_new_session")
-    cleaned_text = _prepare_text_chunks(text)
+    docs = _prepare_doc_texts(text)
+    cleaned_text = [d["text"] for d in docs]
     now = time()
     summary = _generate_report_types(
         text=cleaned_text,
@@ -66,7 +67,7 @@ def create_new_session(
         session_id=session_id,
         version=0,
         title=title.strip() or title_source[:40],
-        text=cleaned_text,
+        text=docs,
         summary=summary,
         inserted_at=now,
         updated_at=now,
@@ -93,7 +94,7 @@ def create_new_session(
 def update_session_summarization(
     user_id: str,
     session_id: str,
-    text: Sequence[str],
+    text: Sequence[Any],
     report_index: int,
     version: int,
     user_uow: IUoW,
@@ -111,14 +112,15 @@ def update_session_summarization(
             raise ValueError("Version mismatch")
         now = time()
 
-        cleaned_text = _prepare_text_chunks(text)
+        docs = _prepare_doc_texts(text)
+        cleaned_text = [d["text"] for d in docs]
 
         summary = _generate_report_types(
             text=cleaned_text,
             report_index=report_index,
             report_uow=report_uow,
         )
-        session.update_text(cleaned_text)
+        session.update_docs(docs)
         session.summary = summary
         session.version = version + 1
         session.updated_at = now
@@ -175,7 +177,13 @@ def download_session_file(session_id: str, format: str, user_id: str, uow: IUoW)
         if session is None:
             raise ValueError("Session not found")
         title = session.title or "Untitled session"
-        query = str(session.text)
+        doc_lines = []
+        for i, d in enumerate(session.doc_texts, 1):
+            meta = " | ".join(filter(None, [d.get("title", ""), d.get("source", ""), d.get("date", ""), d.get("url", "")]))
+            header = f"[{i}] {meta}".strip(" |")
+            doc_lines.append(header if header else f"[{i}]")
+            doc_lines.append(d.get("text", ""))
+        query = "\n\n".join(doc_lines).strip()
         summary = session.summary or ""
 
     normalized_format = format.lower()
@@ -193,7 +201,7 @@ def download_session_file(session_id: str, format: str, user_id: str, uow: IUoW)
             pdf.cell(0, 10, f"Session: {title}", ln=1)
             pdf.ln(5)
             pdf.set_font("DejaVu", "", 11)
-            pdf.multi_cell(0, 8, f"Query:\n{query}")
+            pdf.multi_cell(0, 8, f"Documents:\n{query}")
             pdf.ln(2)
             pdf.multi_cell(0, 8, f"Summary:\n{summary}")
             pdf.output(fp.name)
@@ -231,15 +239,15 @@ def search_similarity_sessions(user_id: str, query: str, uow: IUoW) -> List[Dict
             raise ValueError("User does not have any sessions")
         for session in user.get_sessions():
             parts = [session.title or "", session.summary or ""]
-            session_query = getattr(session, "query", None)
-            if session_query:
-                parts.append(session_query or "")
-            text_value = getattr(session, "text_chunks", [])
-            if text_value:
-                parts.extend(text_value)
-            translation_value = getattr(session, "summary", None)
-            if translation_value:
-                parts.append(translation_value)
+            # Документы: учитываем title/text/source/url/date
+            for d in session.doc_texts:
+                parts.extend([
+                    d.get("title", ""),
+                    d.get("text", ""),
+                    d.get("source", ""),
+                    d.get("url", ""),
+                    d.get("date", ""),
+                ])
             text_blob = " | ".join(part for part in parts if part)
             score = _match_score(text_blob, query)
             if score <= 0:
@@ -451,21 +459,40 @@ def _build_llm() -> "ChatOpenAI":
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
+def _prepare_doc_texts(chunks: Iterable[Any]) -> List[Dict[str, str]]:
+    """
+    Принимает List[DocText | dict | str] и возвращает нормализованный List[dict].
+    """
+    if isinstance(chunks, (str, bytes)) or not isinstance(chunks, Iterable):
+        raise ValueError("Текст должен быть передан списком DocText/объектов")
 
-def _prepare_text_chunks(chunks: Iterable[str]) -> List[str]:
-    if isinstance(chunks, str) or not isinstance(chunks, Iterable):
-        raise ValueError("Текст должен быть передан списком строк")
+    docs: List[Dict[str, str]] = []
+    for item in chunks:
+        # Поддержка Pydantic v2 (model_dump) и v1 (dict)
+        if hasattr(item, "model_dump"):
+            item = item.model_dump()  # type: ignore[attr-defined]
+        elif hasattr(item, "dict"):
+            item = item.dict()  # type: ignore[attr-defined]
 
-    cleaned: List[str] = []
-    for chunk in chunks:
-        value = str(chunk).strip()
-        if value:
-            cleaned.append(value)
+        if isinstance(item, dict):
+            txt = str(item.get("text", "")).strip()
+            if not txt:
+                continue
+            docs.append({
+                "text": txt,
+                "title": str(item.get("title", "")).strip(),
+                "url": str(item.get("url", "")).strip(),
+                "date": str(item.get("date", "")).strip(),
+                "source": str(item.get("source", "")).strip(),
+            })
+        else:
+            s = str(item).strip()
+            if s:
+                docs.append({"text": s, "title": "", "url": "", "date": "", "source": ""})
 
-    if not cleaned:
+    if not docs:
         raise ValueError("Передан пустой текст для суммаризации")
-
-    return cleaned
+    return docs
 
 
 def _generate_report_types(
@@ -485,17 +512,17 @@ def _generate_report_types(
 
 
 def _session_to_dict(session: Session, short: bool = False) -> Dict[str, Any]:
-    session = {
+    payload: Dict[str, Any] = {
         "session_id": session.session_id,
         "version": session.version,
         "title": session.title,
-        "text": session.text_chunks,
+        "text": session.doc_texts,
         "summary": session.summary,
         "inserted_at": session.inserted_at,
         "updated_at": session.updated_at,
     }
     if short:
-        del session['text']
-        del session['summary']
-    return session
+        payload.pop("text", None)
+        payload.pop("summary", None)
+    return payload
 

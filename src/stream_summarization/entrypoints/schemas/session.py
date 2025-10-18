@@ -24,11 +24,18 @@ class ShortSessionInfo(BaseModel):
     inserted_at: float
     updated_at: float
 
+class DocText(BaseModel):
+    text: str
+    title: str = ""
+    url: str = ""
+    date: str = ""
+    source: str = ""
+
 class SessionInfo(BaseModel):
     session_id: str
     version: int
     title: str
-    text: List[str]
+    text: List[DocText]
     summary: str
     inserted_at: float
     updated_at: float
@@ -37,10 +44,9 @@ class SessionInfo(BaseModel):
 class FetchSessionResponse(BaseModel):
     sessions: List[ShortSessionInfo]
 
-
 class CreateSessionRequest(BaseModel):
     title: str = ""
-    text: List[str]
+    text: List[DocText]
     report_index: int
     temporary: Optional[bool] = False
 
@@ -53,7 +59,7 @@ class CreateSessionResponse(BaseModel):
 
 class UpdateSessionSummarizationRequest(BaseModel):
     session_id: str
-    text: List[str]
+    text: List[DocText]
     report_index: int
     version: int
 

@@ -111,14 +111,12 @@ class TestAPI:
         assert 200 == response.status_code
         assert {"status": "ok"} == response.json()
 
-
     # ============================
     # Helpers
     # ============================
     def _auth_headers(self, user_id):
         # имя заголовка берём из conftest.authorization (см. import authorization)
         return {authorization: user_id}
-
 
     def _ensure_user(self, user_id: str, temporary: bool = False):
         resp = requests.post(
@@ -127,7 +125,6 @@ class TestAPI:
         )
         assert resp.status_code == 200
         assert resp.json()["status"] in ("created", "exist")
-
 
     def _extract_uuid(self, payload: dict) -> str:
         """
@@ -138,7 +135,6 @@ class TestAPI:
         assert m, f"Session id (UUID) not found in payload: {payload}"
         return m.group(0)
 
-
     # ============================
     # POSITIVE end-to-end: create → update_* → search/fetch → download → delete
     # ============================
@@ -147,11 +143,11 @@ class TestAPI:
         self._ensure_user(user_id, temporary=False)
         h = self._auth_headers(user_id)
 
-        # Добавили обязательный report_index
+        # Добавили обязательный report_index + DocText
         create_payload = {
             "title": "Smoke test session",
-            "text": ["Hello from test suite"],
-            "messages": [{"role": "user", "content": "Hello from test suite"}],
+            "text": [{"text": "Hello from test suite"}],
+            "messages": [{"role": "user", "content": "Hello from test suite"}],  # игнорится сервисом
             "report_index": 0,
         }
         resp = requests.post(
@@ -172,12 +168,12 @@ class TestAPI:
         )
         assert resp.status_code == 200, resp.text
 
-        # update_summarization — добавляем готовый текст без LLM
+        # update_summarization — добавляем готовый текст без LLM (DocText)
         upd_sum = {
             "session_id": session_id,
             "text": [
-                "Это тестовый отчёт. Раздел 1: краткая выжимка.",
-                "Раздел 2: детали реализации и результаты."
+                {"text": "Это тестовый отчёт. Раздел 1: краткая выжимка.", "title": "R1"},
+                {"text": "Раздел 2: детали реализации и результаты.", "title": "R2"},
             ],
             "report_index": 0,
             "version": 1,
@@ -219,13 +215,6 @@ class TestAPI:
         assert "pdf" in ctype.lower()
         assert int(resp.headers.get("content-length", "1")) > 0 or resp.content
 
-        # # download/docx
-        # resp = requests.get(f"{self._api_url}{self._prefix}/chat_session/download/{session_id}/docx", headers=h)
-        # assert resp.status_code == 200, resp.text
-        # ctype = resp.headers.get("content-type", "")
-        # assert any(x in ctype.lower() for x in ("word", "officedocument", "docx"))
-        # assert int(resp.headers.get("content-length", "1")) > 0 or resp.content
-
         # delete
         resp = requests.delete(
             f"{self._api_url}{self._prefix}/chat_session/delete",
@@ -234,7 +223,7 @@ class TestAPI:
         )
         assert resp.status_code == 200
         status = (resp.json().get("status", "") or "").lower()
-        assert any(s in status for s in ("deleted", "ok", "success"))
+        assert any(s in status for s in ("deleted", "ok", "success")) or status == "success"
 
         # повторное delete — идемпотентно
         resp = requests.delete(
@@ -247,7 +236,7 @@ class TestAPI:
         assert "NOT_FOUND" == status
 
     # ============================
-    # NEGATIVE (как в прежнем ответе) + оставляем
+    # NEGATIVE (оставляем, адаптируя DocText)
     # ============================
 
     # Users router
@@ -286,7 +275,6 @@ class TestAPI:
         )
         assert resp.status_code == 200
 
-
     # Reports router
     async def test_reports__report_types_ok(self):
         resp = requests.get(f"{self._api_url}{self._prefix}/reports/report_types")
@@ -294,7 +282,6 @@ class TestAPI:
         payload = resp.json()
         assert "report_types" in payload
         assert isinstance(payload["report_types"], list)
-
 
     async def test_reports__load_documents_txt_ok(self):
         files = [
@@ -309,7 +296,6 @@ class TestAPI:
         data = resp.json()
         assert "contents" in data and isinstance(data["contents"], list)
         assert len(data["contents"]) == 2
-
 
     async def test_reports__load_documents_unsupported_ext(self):
         files = [("documents", ("bad.xyz", b"???", "application/octet-stream"))]
@@ -326,7 +312,6 @@ class TestAPI:
         resp = requests.get(f"{self._api_url}{self._prefix}/chat_session/fetch_page")
         assert resp.status_code == 400
 
-
     async def test_sessions__fetch_page_unknown_user_ok_empty(self):
         resp = requests.get(
             f"{self._api_url}{self._prefix}/chat_session/fetch_page",
@@ -337,7 +322,6 @@ class TestAPI:
         assert "sessions" in payload and isinstance(payload["sessions"], list)
         assert len(payload["sessions"]) == 0
 
-
     async def test_sessions__session_info_user_not_found(self):
         resp = requests.get(
             f"{self._api_url}{self._prefix}/chat_session/11111111-1111-1111-1111-111111111111",
@@ -345,7 +329,6 @@ class TestAPI:
         )
         assert resp.status_code == 400
         assert "User not found" in resp.json().get("detail", "")
-
 
     async def test_sessions__search_requires_auth_and_nonempty_query(self):
         resp = requests.get(f"{self._api_url}{self._prefix}/chat_session/search", params={"query": "test"})
@@ -366,11 +349,10 @@ class TestAPI:
         assert resp.status_code == 400
         assert "does not have any sessions" in resp.json().get("detail", "")
 
-
     async def test_sessions__update_summarization_user_not_found(self):
         payload = {
             "session_id": "11111111-1111-1111-1111-111111111111",
-            "text": ["a", "b"],
+            "text": [{"text": "a"}, {"text": "b"}],
             "report_index": 0,
             "version": 0,
         }
@@ -381,7 +363,6 @@ class TestAPI:
         )
         assert resp.status_code == 400
         assert "User not found" in resp.json().get("detail", "")
-
 
     async def test_sessions__update_title_user_not_found(self):
         payload = {
@@ -397,7 +378,6 @@ class TestAPI:
         assert resp.status_code == 400
         assert "User not found" in resp.json().get("detail", "")
 
-
     # ============================
     # NEGATIVE: корректируем ожидание для user_not_found
     # ============================
@@ -408,7 +388,7 @@ class TestAPI:
 
         create_payload = {
             "title": "Smoke test session",
-            "text": ["Hello from test suite"],
+            "text": [{"text": "Hello from test suite"}],
             "messages": [{"role": "user", "content": "Hello from test suite"}],
             "report_index": 5,
         }
@@ -418,7 +398,6 @@ class TestAPI:
             headers=h,
         )
         assert 400 == resp.status_code
-
 
     async def test_sessions__delete_user_not_found(self):
         resp = requests.delete(
@@ -434,18 +413,13 @@ class TestAPI:
             body = resp.json()
             status = (body.get("status") or "").lower()
             detail = (body.get("detail") or "")
-            # иногда detail — это список ошибок (pydantic). Приведём к строке.
             if isinstance(detail, list):
                 detail = " ".join(str(x) for x in detail)
             detail = detail.lower()
-            # Принимаем несколько вариантов: статус=not_found|error ИЛИ любая формулировка 'not found' в теле
             assert (
                 status in ("not_found", "error")
                 or "not found" in status
                 or "not found" in detail
             )
         else:
-            # не-JSON ответ: ищем подстроку «not found» в тексте
             assert "not found" in text or "user not found" in text or "error" in text
-
-
