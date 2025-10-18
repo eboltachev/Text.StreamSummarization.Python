@@ -217,7 +217,7 @@ def delete_exist_session(session_id: str, user_id: str, uow: IUoW) -> StatusType
             logger.info("session deleted")
             return StatusType.SUCCESS
     logger.info("finish delete_exist_session")
-    return StatusType.ERROR
+    return StatusType.NOT_FOUND
 
 
 def search_similarity_sessions(user_id: str, query: str, uow: IUoW) -> List[Dict[str, Any]]:

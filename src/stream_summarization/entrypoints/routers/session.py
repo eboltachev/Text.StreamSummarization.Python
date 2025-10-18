@@ -36,7 +36,7 @@ from stream_summarization.services.handlers.session import (
 router = APIRouter()
 
 
-@router.get("/fetch_page", response_model=FetchSessionResponse, status_code=200)
+@router.get("/fetch_page", response_model=FetchSessionResponse, status_code=200, summary="Получить список сессий")
 async def fetch_page(auth: str = Header(default=None, alias=authorization)) -> FetchSessionResponse:
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
@@ -47,7 +47,7 @@ async def fetch_page(auth: str = Header(default=None, alias=authorization)) -> F
     return FetchSessionResponse(sessions=sessions)
 
 
-@router.post("/create", response_model=CreateSessionResponse, status_code=200)
+@router.post("/create", response_model=CreateSessionResponse, status_code=200, summary="Создать сессию")
 async def create(
         request: CreateSessionRequest,
         auth: str = Header(default=None, alias=authorization),
@@ -69,7 +69,7 @@ async def create(
         raise HTTPException(status_code=400, detail=str(error))
 
 
-@router.post("/update_summarization", response_model=UpdateSessionSummarizationResponse, status_code=200)
+@router.post("/update_summarization", response_model=UpdateSessionSummarizationResponse, status_code=200, summary="Обновить сессии")
 async def update_summarization(
         request: UpdateSessionSummarizationRequest,
         auth: str = Header(default=None, alias=authorization),
@@ -91,7 +91,7 @@ async def update_summarization(
     return UpdateSessionSummarizationResponse(summary=summary, error=error)
 
 
-@router.post("/update_title", response_model=UpdateSessionTitleResponse, status_code=200)
+@router.post("/update_title", response_model=UpdateSessionTitleResponse, status_code=200, summary="Обновить заголовок сессии")
 async def update_title(
         request: UpdateSessionTitleRequest,
         auth: str = Header(default=None, alias=authorization),
@@ -111,7 +111,7 @@ async def update_title(
     return UpdateSessionTitleResponse(**session)
 
 
-@router.get("/search", response_model=FetchSessionResponse, status_code=200)
+@router.get("/search", response_model=FetchSessionResponse, status_code=200, summary="Поиск сессий")
 async def similarity_sessions(
         query: str = Query(..., min_length=1),
         auth: str = Header(default=None, alias=authorization),
@@ -128,7 +128,7 @@ async def similarity_sessions(
     return FetchSessionResponse(sessions=sessions)
 
 
-@router.get("/{session_id}", response_model=SessionInfo, status_code=200)
+@router.get("/{session_id}", response_model=SessionInfo, status_code=200, summary="Информация о сессии")
 async def session_info(
         session_id: str,
         auth: str = Header(default=None, alias=authorization),
@@ -166,6 +166,7 @@ async def session_info(
             },
         }
     },
+    summary="Скачать файл сессии"
 )
 async def download_file(
         session_id: str,
@@ -211,7 +212,7 @@ async def download_file(
         raise HTTPException(status_code=404, detail=str(error))
 
 
-@router.delete("/delete", response_model=DeleteSessionResponse, status_code=200)
+@router.delete("/delete", response_model=DeleteSessionResponse, status_code=200, summary="Удалить сессию")
 async def delete(
         request: DeleteSessionRequest,
         auth: str = Header(default=None, alias=authorization),

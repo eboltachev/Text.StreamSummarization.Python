@@ -6,8 +6,6 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ./dev/debug:/app/debug
-      - ./models:/app/models
       - ./report_types.json:/app/report_types.json:ro
     ports:
       - "${STREAM_SUMMARIZATION_API_PORT}:${STREAM_SUMMARIZATION_API_PORT}"

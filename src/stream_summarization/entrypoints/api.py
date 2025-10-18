@@ -17,7 +17,7 @@ class API(FastAPI):
             allow_headers=["*"],
         )
 
-        @self.get("/health")
+        @self.get("/health", summary="Проверка состояния сервиса")
         async def health():
             return {"status": "ok"}
 

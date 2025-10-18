@@ -10,7 +10,7 @@ from stream_summarization.services.handlers.report import extract_text, get_repo
 router = APIRouter()
 
 
-@router.post("/load_documents", response_model=LoadDocumentResponse, status_code=200)
+@router.post("/load_documents", response_model=LoadDocumentResponse, status_code=200, summary="Загрузить документы")
 async def load_document(
     documents: List[UploadFile] = File(...),
 ) -> LoadDocumentResponse:
@@ -32,7 +32,7 @@ async def load_document(
     return LoadDocumentResponse(contents=contents)
 
 
-@router.get("/report_types", response_model=ReportTypesResponse, status_code=200)
+@router.get("/report_types", response_model=ReportTypesResponse, status_code=200, summary="Получить типы отчётов")
 async def report_types() -> ReportTypesResponse:
     types = get_report_types(ReportTemplateUoW())
     return ReportTypesResponse(report_types=types)

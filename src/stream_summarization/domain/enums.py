@@ -25,4 +25,5 @@ class ReportModelType(Enum):
 
 class StatusType(Enum):
     SUCCESS = "SUCCESS"
+    NOT_FOUND = "NOT_FOUND"
     ERROR = "ERROR"
