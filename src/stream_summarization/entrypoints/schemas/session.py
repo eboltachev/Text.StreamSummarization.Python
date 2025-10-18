@@ -17,6 +17,12 @@ class SessionSearchResult(BaseModel):
 class SearchSessionsResponse(BaseModel):
     results: List[SessionSearchResult]
 
+class ShortSessionInfo(BaseModel):
+    session_id: str
+    version: int
+    title: str
+    inserted_at: float
+    updated_at: float
 
 class SessionInfo(BaseModel):
     session_id: str
@@ -29,10 +35,11 @@ class SessionInfo(BaseModel):
 
 
 class FetchSessionResponse(BaseModel):
-    sessions: List[SessionInfo]
+    sessions: List[ShortSessionInfo]
 
 
 class CreateSessionRequest(BaseModel):
+    title: str = ""
     text: List[str]
     report_index: int
     temporary: Optional[bool] = False
@@ -41,7 +48,7 @@ class CreateSessionRequest(BaseModel):
 class CreateSessionResponse(BaseModel):
     session_id: str
     summary: str
-    error: Optional[str]
+    error: str | None
 
 
 class UpdateSessionSummarizationRequest(BaseModel):
@@ -53,7 +60,7 @@ class UpdateSessionSummarizationRequest(BaseModel):
 
 class UpdateSessionSummarizationResponse(BaseModel):
     summary: str
-    error: Optional[str]
+    error: str | None
 
 
 class UpdateSessionTitleRequest(BaseModel):

@@ -13,6 +13,7 @@ from stream_summarization.entrypoints.schemas.session import (
     FetchSessionResponse,
     SearchSessionsResponse,
     SessionInfo,
+    ShortSessionInfo,
     SessionSearchResult,
     UpdateSessionSummarizationRequest,
     UpdateSessionSummarizationResponse,
@@ -29,6 +30,7 @@ from stream_summarization.services.handlers.session import (
     search_similarity_sessions,
     update_session_summarization,
     update_title_session,
+    get_session_info
 )
 
 router = APIRouter()
@@ -39,7 +41,7 @@ async def fetch_page(auth: str = Header(default=None, alias=authorization)) -> F
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
     try:
-        sessions = [SessionInfo(**session) for session in get_session_list(user_id=auth, uow=UserUoW())]
+        sessions = [ShortSessionInfo(**session) for session in get_session_list(user_id=auth, uow=UserUoW())]
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return FetchSessionResponse(sessions=sessions)
@@ -47,14 +49,15 @@ async def fetch_page(auth: str = Header(default=None, alias=authorization)) -> F
 
 @router.post("/create", response_model=CreateSessionResponse, status_code=200)
 async def create(
-    request: CreateSessionRequest,
-    auth: str = Header(default=None, alias=authorization),
+        request: CreateSessionRequest,
+        auth: str = Header(default=None, alias=authorization),
 ) -> CreateSessionResponse:
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
     try:
         session_id, summary, error = create_new_session(
             user_id=auth,
+            title=request.title,
             text=request.text,
             report_index=request.report_index,
             temporary=request.temporary,
@@ -68,8 +71,8 @@ async def create(
 
 @router.post("/update_summarization", response_model=UpdateSessionSummarizationResponse, status_code=200)
 async def update_summarization(
-    request: UpdateSessionSummarizationRequest,
-    auth: str = Header(default=None, alias=authorization),
+        request: UpdateSessionSummarizationRequest,
+        auth: str = Header(default=None, alias=authorization),
 ) -> UpdateSessionSummarizationResponse:
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
@@ -90,8 +93,8 @@ async def update_summarization(
 
 @router.post("/update_title", response_model=UpdateSessionTitleResponse, status_code=200)
 async def update_title(
-    request: UpdateSessionTitleRequest,
-    auth: str = Header(default=None, alias=authorization),
+        request: UpdateSessionTitleRequest,
+        auth: str = Header(default=None, alias=authorization),
 ) -> UpdateSessionTitleResponse:
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
@@ -108,18 +111,36 @@ async def update_title(
     return UpdateSessionTitleResponse(**session)
 
 
-@router.get("/search", response_model=SearchSessionsResponse, status_code=200)
+@router.get("/search", response_model=FetchSessionResponse, status_code=200)
 async def similarity_sessions(
-    query: str = Query(..., min_length=1),
-    auth: str = Header(default=None, alias=authorization),
-) -> SearchSessionsResponse:
+        query: str = Query(..., min_length=1),
+        auth: str = Header(default=None, alias=authorization),
+) -> FetchSessionResponse:
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")
     try:
-        results = search_similarity_sessions(user_id=auth, query=query, uow=UserUoW())
+        sessions = [
+            ShortSessionInfo(**session) for session
+            in search_similarity_sessions(user_id=auth, query=query, uow=UserUoW())
+        ]
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
-    return SearchSessionsResponse(results=[SessionSearchResult(**item) for item in results])
+    return FetchSessionResponse(sessions=sessions)
+
+
+@router.get("/{session_id}", response_model=SessionInfo, status_code=200)
+async def session_info(
+        session_id: str,
+        auth: str = Header(default=None, alias=authorization),
+) -> SessionInfo:
+    user_id = auth
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="Bad Request")
+    try:
+        session = get_session_info(session_id=session_id, user_id=user_id, user_uow=UserUoW())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return SessionInfo(**session)
 
 
 @router.get(
@@ -147,10 +168,10 @@ async def similarity_sessions(
     },
 )
 async def download_file(
-    session_id: str,
-    format: Literal["pdf"],
-    auth: str = Header(default=None, alias=authorization),
-    accept: str = Header(default="*/*", alias="Accept"),
+        session_id: str,
+        format: Literal["pdf"],
+        auth: str = Header(default=None, alias=authorization),
+        accept: str = Header(default="*/*", alias="Accept"),
 ):
     user_id = auth
     if user_id is None:
@@ -192,8 +213,8 @@ async def download_file(
 
 @router.delete("/delete", response_model=DeleteSessionResponse, status_code=200)
 async def delete(
-    request: DeleteSessionRequest,
-    auth: str = Header(default=None, alias=authorization),
+        request: DeleteSessionRequest,
+        auth: str = Header(default=None, alias=authorization),
 ) -> DeleteSessionResponse:
     if auth is None:
         raise HTTPException(status_code=400, detail="Authorization header is required")

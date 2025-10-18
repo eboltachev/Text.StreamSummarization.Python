@@ -37,13 +37,14 @@ def get_session_list(user_id: str, uow: IUoW) -> List[Dict[str, Any]]:
         if not user:
             return []
         for session in user.get_sessions()[: settings.STREAM_SUMMARIZATION_MAX_SESSIONS]:
-            sessions.append(_session_to_dict(session))
+            sessions.append(_session_to_dict(session, short=True))
     logger.info("finish get_session_list")
     return sessions
 
 
 def create_new_session(
     user_id: str,
+    title: str,
     text: Sequence[str],
     report_index: int,
     temporary: bool,
@@ -64,7 +65,7 @@ def create_new_session(
     session = Session(
         session_id=session_id,
         version=0,
-        title=title_source[:40],
+        title=title.strip() or title_source[:40],
         text=cleaned_text,
         summary=summary,
         inserted_at=now,
@@ -154,6 +155,16 @@ def update_title_session(
     logger.info("finish update_title_session")
     return _session_to_dict(session)
 
+def get_session_info(session_id: str, user_id: str, user_uow: IUoW) -> Dict[str, Any]:
+    with user_uow:
+        user = user_uow.users.get(object_id=user_id)
+        if user is None:
+            raise ValueError("User not found")
+        session = user.get_session(session_id)
+        if session is None:
+            raise ValueError("Session not found")
+        return _session_to_dict(session)
+
 
 def download_session_file(session_id: str, format: str, user_id: str, uow: IUoW) -> Path:
     with uow:
@@ -233,20 +244,12 @@ def search_similarity_sessions(user_id: str, query: str, uow: IUoW) -> List[Dict
             score = _match_score(text_blob, query)
             if score <= 0:
                 continue
-            results.append(
-                {
-                    "title": session.title or "",
-                    "query": session_query or (text_value[0] if text_value else ""),
-                    "summary": translation_value or "",
-                    "inserted_at": float(session.inserted_at),
-                    "session_id": session.session_id,
-                    "score": float(score),
-                }
-            )
-    results.sort(key=lambda item: item["score"], reverse=True)
-    limited_results = results[:20]
-    logger.info(f"finish search_similarity_sessions, found={len(limited_results)}")
-    return limited_results
+            results.append((_session_to_dict(session, short=True), score))
+    results.sort(key=lambda item: item[1], reverse=True)
+    results = results[:settings.STREAM_SUMMARIZATION_MAX_SESSIONS]
+    results = [result[0] for result in results]
+    logger.info(f"finish search_similarity_sessions, found={len(results)}")
+    return results
 
 
 def _normalize_text(value: str) -> str:
@@ -481,8 +484,8 @@ def _generate_report_types(
     return response
 
 
-def _session_to_dict(session: Session) -> Dict[str, Any]:
-    return {
+def _session_to_dict(session: Session, short: bool = False) -> Dict[str, Any]:
+    session = {
         "session_id": session.session_id,
         "version": session.version,
         "title": session.title,
@@ -491,3 +494,8 @@ def _session_to_dict(session: Session) -> Dict[str, Any]:
         "inserted_at": session.inserted_at,
         "updated_at": session.updated_at,
     }
+    if short:
+        del session['text']
+        del session['summary']
+    return session
+
